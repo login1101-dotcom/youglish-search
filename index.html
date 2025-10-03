@@ -87,7 +87,7 @@
 </div>
 
 <script>
-/* ========== ユーザー指定の17カテゴリ（表示名 / 正規化IPA / ファイル名） ========== */
+/* ========== 17カテゴリ定義 ========== */
 const VOWEL_BOOK = [
   {key:'short_a',  label:'short a',   symbol:'æ',  vfile:'short_a.mp3',  ex:['cat','camp','bath','fan']},
   {key:'long_a',   label:'long a',    symbol:'eɪ', vfile:'long_a.mp3',   ex:['fate','great']},
@@ -108,42 +108,36 @@ const VOWEL_BOOK = [
   {key:'short_u',  label:'short u',   symbol:'ʌ',  vfile:'short_u.mp3',  ex:['cup','but','support']},
 ];
 
-/* key→定義 */
 const BOOK_BY_KEY = Object.fromEntries(VOWEL_BOOK.map(v=>[v.key,v]));
-/* symbol→key（表示用） */
 const SYMBOL_BY_KEY = Object.fromEntries(VOWEL_BOOK.map(v=>[v.key, v.symbol]));
 
-/* ========== 正規化：置換ルール ========== */
-/* 
-  1) まず強勢記号の除去・NFC正規化
-  2) 複合・r化・中心化の順でトークン化
-  3) 各トークンを17カテゴリにマップ
-*/
+/* ========== 正規化：ルール ========== */
 const STRESS_RE = /[ˈˌ]/g;
 
-/* トークン化で使う順序（長い順） */
+/* トークン抽出（順序重要・長いもの先） */
 const TOKEN_RE = new RegExp([
   'ɑːr','ɑr','ɔːr','ɔr',        // r連結
-  'ɪə','eə','ʊə',               // 中心化二重母音 → [前母音, er]
-  'oʊ','əʊ',                    // long o 統合
+  'ɪə','eə','ʊə','ɛə',          // 中心化（※ 追加: ɛə）
+  'oʊ','əʊ',                    // long o
   'aɪ','aʊ','ɔɪ',               // 二重母音
   'iː','uː','ɜːr','ɝː',         // 長母音・r化
-  'ɑː','ɔː',                    // 長母音（後で or/ar へ）
+  'ɑː','ɔː',                    // 長母音（後段で or/ar）
   'ɝ','ɚ','ɜː',                // er 系
-  'æ','e','ɛ','ɪ','i','ʊ','ɑ','ɒ','ʌ','ə','ɔ'  // 単母音（最後に）
+  'æ','e','ɛ','ɪ','i','ʊ','ɑ','ɒ','ʌ','ə','ɔ'  // 単母音
 ].join('|'), 'g');
 
-/* 個々トークンを 17カテゴリへ */
+/* トークン→カテゴリ */
 function mapTokenToCat(tok){
   switch(tok){
     // --- r合流 ---
     case 'ɑːr': case 'ɑr': case 'ɑː': return {key:'ar_sound', symbol:'ɑːr'};
-    case 'ɔːr': case 'ɔr': case 'ɔː': case 'ɔ': return {key:'or_sound', symbol:'ɔːr'}; // 単独 ɔ も or sound へ
+    case 'ɔːr': case 'ɔr': case 'ɔː': case 'ɔ': return {key:'or_sound', symbol:'ɔːr'};
 
-    // --- 中心化二重母音（後段で展開するのでここでは通過） ---
+    // --- 中心化二重母音 ---
     case 'ɪə': return ['ɪ','ER'];
     case 'eə': return ['e','ER'];
     case 'ʊə': return ['ʊ','ER'];
+    case 'ɛə': return {key:'short_a', symbol:'æ'}; // ★ 追加：æ-raising を short a 扱い
 
     // --- 長母音／二重母音など ---
     case 'oʊ': case 'əʊ':           return {key:'long_o',   symbol:'oʊ'};
@@ -170,11 +164,9 @@ function mapTokenToCat(tok){
   }
 }
 
-/* 全トークン抽出 */
 function tokenizeVowels(ipa){
   const core = ipa.normalize('NFC').replace(STRESS_RE,'');
   const toks = core.match(TOKEN_RE) || [];
-  // 中心化の ɪə/eə/ʊə を [前, ER] に展開
   const expanded = [];
   for(const t of toks){
     const m = mapTokenToCat(t);
@@ -183,7 +175,6 @@ function tokenizeVowels(ipa){
   return expanded;
 }
 
-/* 正規化 → カテゴリ配列（重複あり） */
 function normalizeToCats(ipa){
   const toks = tokenizeVowels(ipa);
   const cats = [];
@@ -195,10 +186,10 @@ function normalizeToCats(ipa){
   return cats;
 }
 
-/* 表示用： /.../ に赤ハイライト */
+/* ハイライト（母音だけ赤） */
 const HILITE_RE = new RegExp([
   'ɑːr','ɑr','ɔːr','ɔr',
-  'ɪə','eə','ʊə',
+  'ɪə','eə','ʊə','ɛə',     // ★ 追加: ɛə
   'oʊ','əʊ',
   'aɪ','aʊ','ɔɪ',
   'iː','uː','ɜːr','ɝː',
@@ -210,7 +201,6 @@ const HILITE_RE = new RegExp([
 function hiliteIPA(ipaRaw){
   const ipa = ipaRaw.normalize('NFC');
   return ipa.replace(HILITE_RE, (m)=>{
-    // ɪə/eə/ʊə は分割して両方赤
     if(m==='ɪə' || m==='eə' || m==='ʊə'){
       return `<span class="vwl">${m[0]}</span><span class="vwl">ə</span>`;
     }
@@ -224,29 +214,24 @@ async function fetchIPA(word){
   const r = await fetch(url);
   if(!r.ok) throw new Error('API error');
   const js = await r.json();
-  // phonetics の text から IPAっぽいものを優先
   for(const entry of js){
     if(entry && Array.isArray(entry.phonetics)){
       for(const ph of entry.phonetics){
         if(ph && ph.text && /[æɑɔɪʊɝɚɜɛːəoʌi]/.test(ph.text)){
-          // 一緒に audio があれば辞書音声にも使う
           return {ipa: ph.text, audio: ph.audio||''};
         }
       }
     }
-    // meanings > phonetics の fallback（辞書によっては text がここに）
     if(entry && entry.phonetic){ return {ipa: entry.phonetic, audio: ''}; }
   }
   throw new Error('IPA not found');
 }
 
-/* 17母音をこの単語に含むものだけ表示 */
+/* UI描画 */
 function renderCats(cats){
   const uniqKeys = [];
-  const byKey = {};
-  for(const c of cats){
-    if(!byKey[c.key]){ byKey[c.key] = true; uniqKeys.push(c.key); }
-  }
+  const seen = {};
+  for(const c of cats){ if(!seen[c.key]){ seen[c.key]=1; uniqKeys.push(c.key); } }
   const wrap = document.getElementById('catList');
   wrap.innerHTML = '';
   for(const k of uniqKeys){
@@ -261,7 +246,6 @@ function renderCats(cats){
   }
 }
 
-/* 例語：この単語に現れたキーだけを並べる */
 function renderExamples(cats){
   const keys = [...new Set(cats.map(c=>c.key))];
   const tgt = document.getElementById('examples');
@@ -282,8 +266,6 @@ function renderExamples(cats){
     `;
     tgt.appendChild(box);
   }
-
-  // 例語クリックで再生
   tgt.querySelectorAll('.chip').forEach(ch=>{
     ch.addEventListener('click',()=>{
       const au = ch.querySelector('audio');
@@ -292,72 +274,54 @@ function renderExamples(cats){
   });
 }
 
-/* 正規化表示（/.../でまとめなおす。母音だけ赤） */
 function renderNormIPA(cats){
   if(!cats.length){
     document.getElementById('ipaNorm').innerHTML = '—';
     return;
   }
   const seq = cats.map(c=>c.symbol);
-  // 連結して /.../ のように見せる（見た目用）
-  const joined = seq.join('');
-  const shown = '/' + joined + '/';
+  const shown = '/' + seq.join('') + '/';
   document.getElementById('ipaNorm').innerHTML = hiliteIPA(shown);
 }
 
-/* 検索ハンドラ */
+/* 検索 */
 async function run(){
   const q = document.getElementById('q').value.trim();
   document.getElementById('echo').textContent = q || '—';
-  if(!q){ return; }
+  if(!q) return;
 
-  // YouGlishボタン
   document.getElementById('yg').onclick = ()=>{
     const u = `https://youglish.com/pronounce/${encodeURIComponent(q)}/english/us`;
     window.open(u,'_blank');
   };
 
-  // 取得
-  let ipa, audioUrl='';
+  let ipa='', audioUrl='';
   try{
     const {ipa:ipaRaw, audio} = await fetchIPA(q);
-    ipa = ipaRaw;
+    ipa = ipaRaw || '';
     audioUrl = audio || '';
-  }catch(e){
-    ipa = '';
-  }
+  }catch(e){ ipa=''; }
 
-  // 表示：辞書IPA（赤ハイライト）
   const dictBox = document.getElementById('ipaDict');
-  if(ipa){
-    dictBox.innerHTML = hiliteIPA(ipa);
-  }else{
-    dictBox.textContent = '—';
-  }
+  dictBox.innerHTML = ipa ? hiliteIPA(ipa) : '—';
 
-  // 辞書音声（可能なときのみ）
   const dictAudio = document.getElementById('dictAudio');
   document.getElementById('playDict').onclick = ()=>{
-    if(!audioUrl){
-      alert('辞書音声はありません。');
-      return;
-    }
+    if(!audioUrl){ alert('辞書音声はありません。'); return; }
     dictAudio.src = audioUrl;
     dictAudio.play().catch(()=>{});
   };
 
-  // Wiktionaryリンク
-  const wiki = document.getElementById('wikilink');
-  wiki.innerHTML = `<a target="_blank" rel="noopener" href="https://en.wiktionary.org/wiki/${encodeURIComponent(q)}">Wiktionary</a>`;
+  document.getElementById('wikilink').innerHTML =
+    `<a target="_blank" rel="noopener" href="https://en.wiktionary.org/wiki/${encodeURIComponent(q)}">Wiktionary</a>`;
 
-  // 正規化 → カテゴリ抽出
   const cats = ipa ? normalizeToCats(ipa) : [];
   renderNormIPA(cats);
   renderCats(cats);
   renderExamples(cats);
 }
 
-/* UI 初期化 */
+/* 初期化 */
 document.getElementById('btn').addEventListener('click', run);
 document.getElementById('q').addEventListener('keydown', (e)=>{ if(e.key==='Enter') run(); });
 document.addEventListener('DOMContentLoaded', ()=>{
