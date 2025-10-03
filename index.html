@@ -274,13 +274,14 @@ function renderExamples(cats){
   });
 }
 
+/* ★ 正規化IPAの表示（スペース区切りに修正） */
 function renderNormIPA(cats){
   if(!cats.length){
     document.getElementById('ipaNorm').innerHTML = '—';
     return;
   }
   const seq = cats.map(c=>c.symbol);
-  const shown = '/' + seq.join('') + '/';
+  const shown = '/' + seq.join(' ') + '/';   // ← ここをスペース区切り
   document.getElementById('ipaNorm').innerHTML = hiliteIPA(shown);
 }
 
