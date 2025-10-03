@@ -1,11 +1,270 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>Youglish Search Test</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>母音抽出＋例語再生（USのみ・ローカル音源）</title>
+<style>
+  :root{
+    --fg:#0b0b0c; --muted:#6b7280; --chip:#f3f4f6; --ring:#e5e7eb; --acc:#2563eb;
+  }
+  body{font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; margin:0; color:var(--fg); background:#fff;}
+  .container{max-width:980px; margin:32px auto; padding:0 16px;}
+  h1{font-size:22px; margin:0 0 16px;}
+  .row{display:flex; gap:8px; align-items:center; margin:8px 0 20px;}
+  input[type="text"]{flex:1; padding:10px 12px; border:1px solid var(--ring); border-radius:8px; font-size:16px;}
+  button{border:1px solid var(--ring); background:#fff; border-radius:8px; padding:10px 14px; cursor:pointer;}
+  button:hover{background:#fafafa}
+  .sec{margin:22px 0;}
+  .sec h3{font-size:14px; font-weight:600; color:#111; margin:0 0 8px;}
+  .pill{display:inline-flex; gap:8px; align-items:center; border:1px solid var(--ring); background:#fff; border-radius:999px; padding:6px 10px; font-size:14px; margin:4px 6px 0 0;}
+  .muted{color:var(--muted); font-size:13px;}
+  .ipa{font-family: ui-serif, "Times New Roman", serif; letter-spacing: .4px;}
+  .hi{color:#d00; font-weight:700;}
+  .chips{display:flex; flex-wrap:wrap; gap:8px;}
+  .chip{background:var(--chip); border-radius:999px; padding:6px 10px; font-size:14px;}
+  .examples{display:flex; flex-wrap:wrap; gap:6px; margin-left:10px;}
+  .example{border:1px dashed var(--ring); padding:4px 8px; border-radius:999px; font-size:13px; color:#374151;}
+  .card{border:1px solid var(--ring); border-radius:12px; padding:12px; background:#fff;}
+  .small{font-size:12px; color:var(--muted);}
+  .btn-link{color:var(--acc); border-color:#c7d2fe;}
+  .badge{display:inline-block; border:1px solid var(--ring); border-radius:8px; padding:3px 6px; font-size:12px; margin-left:8px; background:#fff;}
+  .flex{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+</style>
 </head>
 <body>
-  <h1 style="color: red;">これはテストです 🚀</h1>
-  <p>GitHub Pages に clip_deploy.sh で反映できたか確認しましょう。</p>
+<div class="container">
+  <h1>母音抽出＋例語再生（USのみ・ローカル音源）</h1>
+
+  <div class="row">
+    <input id="q" type="text" placeholder="単語を入力" />
+    <button id="btnSearch">検索</button>
+    <button id="btnYG">YouGlishで開く</button>
+  </div>
+
+  <div id="status" class="muted">準備中…</div>
+
+  <div class="sec">
+    <div class="pill">入力 <span id="w_in" class="ipa"></span></div>
+  </div>
+
+  <div class="sec card">
+    <h3>辞書（IPA） <span class="small">※ 取得元: dictionaryapi.dev（US優先）</span></h3>
+    <div class="flex">
+      <div id="ipa_raw" class="ipa" style="font-size:20px;"></div>
+      <button id="btnPlay" class="btn-link" style="display:none;">▶︎ 再生</button>
+      <a id="lnkWiki" class="btn-link" target="_blank" rel="noopener" style="display:none;">Wiktionaryで開く</a>
+    </div>
+  </div>
+
+  <div class="sec card">
+    <h3>発音記号（17母音への正規化）</h3>
+    <div id="ipa_norm" class="chips"></div>
+    <div id="norm_explain" class="small" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="sec card">
+    <h3>17母音 一覧（例単語）</h3>
+    <div id="vowel_chips" class="chips"></div>
+  </div>
+</div>
+
+<script>
+const $ = sel => document.querySelector(sel);
+const setStatus = (t)=> $("#status").textContent = t;
+
+// 17母音テーブル（表示名 / マッチ / 例）
+const VOWELS = [
+  { id:'short_a',  name:'short a /æ/',   pat:/æ/g,           ex:['camp','bath','fan'] },
+  { id:'long_a',   name:'long a /eɪ/',   pat:/eɪ/g,          ex:['fate','they','great'] },
+  { id:'ar',       name:'ar sound /ɑːr/',pat:/ɑːr/g,         ex:['car','art','mark'] },
+  { id:'schwa',    name:'Schwa /ə/',     pat:/ə/g,           ex:['about','support','pencil'] },
+
+  { id:'short_e',  name:'short e /e/',   pat:/\be(?![ːɪ])/g, ex:['let','get','egg'] }, // 単独e
+  { id:'long_e',   name:'long e /iː/',   pat:/iː/g,          ex:['fee','she','believe'] },
+  { id:'er',       name:'er sound /ɝː/', pat:/ɝː|ɝ|ɚ/g,     ex:['bird','term','hurt'] },
+
+  { id:'short_i',  name:'short i /ɪ/',   pat:/ɪ/g,           ex:['fit','income','it'] },
+  { id:'long_i',   name:'long i /aɪ/',   pat:/aɪ/g,          ex:['eye','iron','idea'] },
+
+  { id:'short_o',  name:'short o /ɑ/',   pat:/ɑ/g,           ex:['hot','not','lock'] },
+  { id:'short_oo', name:'short oo /ʊ/',  pat:/ʊ/g,           ex:['book','should','put'] },
+  { id:'long_oo',  name:'long oo /uː/',  pat:/uː/g,          ex:['too','loose','through'] },
+  { id:'long_o',   name:'long o /oʊ/',   pat:/oʊ/g,          ex:['note','no','slow'] },
+  { id:'ow',       name:'ow sound /aʊ/', pat:/aʊ/g,          ex:['house','out','count'] },
+  { id:'oi',       name:'oi sound /ɔɪ/', pat:/ɔɪ/g,          ex:['boy','joy','join'] },
+  { id:'or',       name:'or sound /ɔːr/',pat:/ɔːr/g,         ex:['for','sort','storm'] },
+
+  // 補助：raw IPAの強調専用（分類には使わない）
+];
+const RAW_HI_ORDER = [
+  /ɑːr/g, /ɔːr/g, /ɔɪ/g, /aʊ/g, /oʊ/g, /uː/g, /iː/g, /eɪ/g, /aɪ/g, /ɝː|ɝ|ɚ/g,
+  /æ/g, /e/g, /ɪ/g, /ʊ/g, /ɑ/g, /ʌ/g, /ɔ/g // /ɔ/ は強調のみ（分類は short o /ɑ/ へ畳み込み）
+];
+
+// 17母音の一覧チップ
+function renderVowelChips(){
+  const wrap = $("#vowel_chips");
+  wrap.innerHTML = "";
+  VOWELS.forEach(v=>{
+    const chip = document.createElement("div");
+    chip.className = "chip";
+    chip.textContent = v.name;
+    const ex = document.createElement("div");
+    ex.className = "examples";
+    v.ex.forEach(w=>{
+      const e = document.createElement("span");
+      e.className = "example";
+      e.textContent = w;
+      ex.appendChild(e);
+    });
+    const box = document.createElement("div");
+    box.className = "flex";
+    box.append(chip, ex);
+    wrap.appendChild(box);
+  });
+}
+
+// IPA の赤ハイライト（辞書表示用）
+function highlightRawIPA(ipa){
+  if(!ipa) return "";
+  let s = ipa.replace(/^\/|\/$/g,"");
+  RAW_HI_ORDER.forEach(r=>{
+    s = s.replace(r, m=>`<span class="hi">${m}</span>`);
+  });
+  return `/${s}/`;
+}
+
+// 取得IPA → 17母音へ正規化（カテゴリ列・説明テキスト）
+function normalizeTo17(ipa){
+  if(!ipa) return { cats:[], explain:"（IPA無し）" };
+  const raw = ipa.replace(/^\/|\/$/g,"");
+
+  // マッチの優先順位（長いもの優先）
+  const order = [
+    {key:'ar', re:/ɑːr/g}, {key:'or', re:/ɔːr/g}, {key:'oi', re:/ɔɪ/g}, {key:'ow', re:/aʊ/g},
+    {key:'long_o', re:/oʊ/g}, {key:'long_oo', re:/uː/g}, {key:'long_e', re:/iː/g},
+    {key:'long_a', re:/eɪ/g}, {key:'long_i', re:/aɪ/g}, {key:'er', re:/ɝː|ɝ|ɚ/g},
+    {key:'short_a', re:/æ/g}, {key:'short_e', re:/\be(?![ːɪ])/g},
+    {key:'short_i', re:/ɪ/g}, {key:'short_oo', re:/ʊ/g},
+    // ここがポイント：/ɔ/ は分類としては short o /ɑ/ に畳み込み
+    {key:'_raw_ɔ', re:/ɔ/g},
+    {key:'short_o', re:/ɑ/g},
+    {key:'_short_u', re:/ʌ/g} // 表では short u /ʌ/ もあるが、頻度低：念の為拾う
+  ];
+
+  const cats = new Set();
+  let explain = [];
+
+  for(const o of order){
+    const hits = raw.match(o.re);
+    if(hits){
+      if(o.key === '_raw_ɔ'){
+        cats.add('short_o'); // 17母音では /ɑ/ へ寄せる
+        explain.push("raw「ɔ」→ 正規化「ɑ」（short o）");
+      }else if(o.key === '_short_u'){
+        // 表にあるのでそのまま追加（表示名は chips 側にある）
+        cats.add('short_u');
+        explain.push("raw「ʌ」→ 正規化「ʌ」（short u）");
+      }else{
+        cats.add(o.key);
+      }
+    }
+  }
+
+  // cats を表示用に並べ替え（VOWELSの定義順）
+  const ordered = VOWELS.filter(v=>cats.has(v.id));
+  if(cats.has('short_u') && !VOWELS.find(v=>v.id==='short_u')){
+    // 一応ガード（表に存在しない場合は無視）
+  }
+
+  const explainText = explain.length ? "正規化メモ： " + explain.join(" ／ ") :
+    "（取得IPAを17母音にマッピングしました）";
+
+  return { cats: ordered, explain: explainText };
+}
+
+// dictionaryapi.dev から US優先で IPA と音声URLを取得
+async function fetchIPA(word){
+  const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error("dictionaryapi.dev error");
+  const json = await res.json();
+
+  // phonetics 配列から US を優先して選ぶ
+  let ipa = "";
+  let audio = "";
+  for(const sense of json){
+    if(Array.isArray(sense.phonetics)){
+      // US優先
+      const us = sense.phonetics.find(p => (p.audio||"").includes("-us.mp3") && p.text);
+      if(us){ ipa = us.text; audio = us.audio; break; }
+      const any = sense.phonetics.find(p => p.text);
+      if(any){ ipa = any.text; audio = any.audio || ""; break; }
+    }
+  }
+  return { ipa, audio };
+}
+
+function youglishURL(w){
+  return `https://youglish.com/pronounce/${encodeURIComponent(w)}/english/us`;
+}
+
+// ------------- イベントまわり ---------------
+async function run(){
+  const w = ($("#q").value || "").trim();
+  if(!w){ setStatus("単語を入力してください。"); return; }
+  $("#w_in").textContent = w;
+  $("#ipa_raw").innerHTML = "";
+  $("#ipa_norm").innerHTML = "";
+  $("#norm_explain").textContent = "";
+  $("#btnPlay").style.display = "none";
+  $("#lnkWiki").style.display = "none";
+  setStatus("IPA取得中…");
+
+  try{
+    const {ipa, audio} = await fetchIPA(w);
+    if(!ipa){
+      setStatus("IPAが見つかりませんでした。");
+      return;
+    }
+
+    // 辞書（IPA）表示：取得そのまま＋母音強調
+    $("#ipa_raw").innerHTML = highlightRawIPA(ipa);
+    $("#lnkWiki").href = `https://en.wiktionary.org/wiki/${encodeURIComponent(w)}#English`;
+    $("#lnkWiki").style.display = "inline-block";
+
+    if(audio){
+      $("#btnPlay").onclick = ()=> new Audio(audio).play();
+      $("#btnPlay").style.display = "inline-block";
+    }
+
+    // 17母音へ正規化
+    const {cats, explain} = normalizeTo17(ipa);
+    const box = $("#ipa_norm");
+    cats.forEach(v=>{
+      const d = document.createElement("div");
+      d.className = "chip";
+      d.textContent = v.name;
+      box.appendChild(d);
+    });
+    $("#norm_explain").textContent = explain;
+    setStatus("完了（IPA取得済）");
+  }catch(e){
+    console.error(e);
+    setStatus("エラー：IPAの取得に失敗しました。");
+  }
+}
+
+$("#btnSearch").addEventListener("click", run);
+$("#q").addEventListener("keydown", (e)=>{ if(e.key==="Enter") run(); });
+$("#btnYG").addEventListener("click", ()=>{
+  const w = ($("#q").value||"").trim(); if(!w) return;
+  window.open(youglishURL(w), "_blank","noopener");
+});
+
+renderVowelChips();
+setStatus("準備OK（IPA取得可）");
+</script>
 </body>
 </html>
