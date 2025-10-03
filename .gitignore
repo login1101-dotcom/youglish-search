@@ -1,0 +1,4 @@
+
+# --- allow site audio assets ---
+!audio/
+!audio/**/*.mp3
