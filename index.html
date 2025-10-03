@@ -2,376 +2,368 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>母音抽出＋例語再生（USのみ・ローカル音源）</title>
 <style>
   :root{
-    --bg:#fff; --fg:#111; --muted:#666;
-    --card:#fafafa; --line:#eee; --brand:#0d6efd; --accent:#d00;
+    --bg:#f7f7fb; --card:#ffffff; --ink:#222; --muted:#666; --line:#e7e7ef; --accent:#2563eb;
+    --red:#e11d48;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic Medium","YuGothic",Meiryo,Arial,sans-serif}
-  header{position:sticky;top:0;background:#fffbd8;border-bottom:1px solid #eadf9a;padding:14px 10px;z-index:3}
-  .wrap{max-width:980px;margin:0 auto;padding:12px}
-  h1{margin:6px 0 12px;font-size:20px}
-  .row{display:flex;gap:8px}
-  input[type="text"]{flex:1;min-width:220px;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:16px}
-  button{padding:10px 14px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer}
-  button:hover{border-color:#999}
-  section{background:var(--card);border:1px solid var(--line);border-radius:12px;margin:14px 0;padding:14px}
-  h2{font-size:14px;margin:0 0 10px;color:#333}
-  .ipa{font-family: "Noto Sans", "Noto Sans JP", "Arial", system-ui, sans-serif; font-size:22px}
-  .hl{color:var(--accent);font-weight:700}
-  .badge{display:inline-flex;align-items:center;gap:.5em;background:#fff;border:1px solid var(--line);border-radius:24px;padding:8px 12px;margin:4px 6px 0 0}
-  .badge .small{color:var(--muted);font-size:12px}
-  .chips{display:flex;flex-wrap:wrap;gap:8px}
-  .chip{display:inline-flex;align-items:center;border:1px solid #ddd;border-radius:999px;padding:8px 12px;background:#fff}
-  audio{width:260px;max-width:100%}
-  .note{color:var(--muted);font-size:12px;margin-top:8px}
-  .cta{display:inline-flex;gap:8px}
-  .btn{padding:8px 12px;border:1px solid #ddd;border-radius:8px;background:#fff}
-  .btn-primary{border-color:var(--brand);color:#fff;background:var(--brand)}
-  .flex{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "YuGothic", "Meiryo", "Noto Sans JP", sans-serif;}
+  .wrap{max-width:960px;margin:32px auto;padding:0 16px;}
+  h1{font-size:22px;margin:0 0 12px;}
+  .bar{background:#fff7d6;border:1px solid #ffe9a6;padding:12px 16px;border-radius:10px;margin-bottom:16px}
+  .row{display:flex;gap:8px;align-items:center}
+  input[type="text"]{flex:1;padding:12px 12px;border:1px solid var(--line);border-radius:10px;font-size:16px;background:#fff;}
+  button{padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font-weight:600}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:14px 0}
+  .title{font-weight:700;margin-bottom:8px}
+  .muted{color:var(--muted);font-size:12px}
+  .ipa{font-size:28px;letter-spacing:1px;margin:12px 0}
+  .ipa .vred{color:var(--red);font-weight:800}
+  .badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 10px;margin:6px 6px 0 0;background:#fff}
+  .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:14px;padding:6px 10px;margin:6px 6px 0 0;background:#fff}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  .tiny{font-size:12px}
+  .audrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .audrow audio{width:240px;max-width:100%}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
-<header>
-  <div class="wrap">
+<div class="wrap">
+
+  <div class="bar">
     <h1>母音抽出＋例語再生（USのみ・ローカル音源）</h1>
     <div class="row">
-      <input id="q" type="text" placeholder="単語を入力（例: cat, dog, bird, car, boy, centrifuge）" />
-      <button id="searchBtn" class="btn-primary">検索</button>
-      <div class="cta">
-        <button id="ygBtn" class="btn">YouGlishで開く</button>
-      </div>
+      <input id="q" type="text" placeholder="単語を入力（例: dog, cat, bird, car, boy, centrifuge ...）" />
+      <button id="go" class="primary">検索</button>
+      <button id="yg">YouGlishで開く</button>
     </div>
   </div>
-</header>
 
-<main class="wrap">
-  <section id="s-ipa">
-    <h2>辞書（IPA）</h2>
-    <div id="ipaText" class="ipa">—</div>
-    <div class="note">※ 取得元: <span class="mono">dictionaryapi.dev（US）</span> / 「辞書音声」ボタンは辞書側音声</div>
-    <div id="dictAudioCtl" class="flex" style="margin-top:8px;"></div>
-  </section>
+  <!-- 辞書 IPA -->
+  <div class="card" id="secDict">
+    <div class="title">辞書（IPA）</div>
+    <div class="ipa" id="ipaDict">—</div>
+    <div class="audrow">
+      <button id="dictSpeak" class="pill">辞書音声</button>
+      <a id="wikilink" class="pill" href="#" target="_blank" rel="noopener">Wiktionary</a>
+    </div>
+    <div class="muted tiny">※ 取得元: dictionaryapi.dev（US） / 「辞書音声」ボタンは辞書の音声を再生</div>
+    <audio id="dictAudio" preload="none"></audio>
+  </div>
 
-  <section id="s-norm">
-    <h2>発音記号（17母音に正規化＆赤色強調）</h2>
-    <div id="normText" class="ipa">—</div>
-    <div class="note">※ 取得 IPA から<strong>母音コア</strong>（æ, ɑ, ɔ, iː, ɪ, uː, ʊ, oʊ, aɪ, aʊ, ɔɪ, ɝ, ɚ, ɑːr, ɔːr, e, ʌ, ə など）だけを抽出し、指定 17 カテゴリへマッピング・赤強調。</div>
-  </section>
+  <!-- 正規化＆赤強調 -->
+  <div class="card" id="secNorm">
+    <div class="title">発音記号（17母音に正規化＆赤色強調）</div>
+    <div class="ipa" id="ipaNorm">—</div>
+    <div class="muted tiny">※ 取得IPAから母音コア（ae, o, ɑ, ɔ, ɝ, ɑːr, ɔːr, e, ɪ, iː, uː, ʊ, oʊ, aɪ, aʊ, ɔɪ, ə など）だけ抽出し、指定17カテゴリへマッピング。赤強調。</div>
+  </div>
 
-  <section id="s-cats">
-    <h2>母音カテゴリ（この単語に含まれるもののみ）</h2>
-    <div id="vowelCats" class="chips"></div>
-    <div class="note">ボタンはローカル母音音源（<span class="mono">~/youglish-search/audio/vowels/*.mp3</span>）を再生します。</div>
-  </section>
+  <!-- 含まれるカテゴリのみ -->
+  <div class="card" id="secCats">
+    <div class="title">母音カテゴリ（この単語に含まれるもののみ）</div>
+    <div id="cats"></div>
+  </div>
 
-  <section id="s-eg">
-    <h2>例単語（クリックでローカル音声再生）</h2>
-    <div id="egArea"></div>
-    <div class="note">例単語音源は <span class="mono">~/youglish-search/audio/words/*.mp3</span></div>
-  </section>
+  <!-- 例単語（ローカル再生） -->
+  <div class="card" id="secEx">
+    <div class="title">例単語（クリックでローカル音声再生）</div>
+    <div id="examples"></div>
+    <div class="hint">ローカル音声フォルダ:  ~/youglish-search/audio/vowels/*.mp3 、 ~/youglish-search/audio/words/*.mp3</div>
+  </div>
 
-  <section>
-    <h2>ローカル音声フォルダ:</h2>
-    <div class="mono">~/youglish-search/audio/vowels/*.mp3 , ~/youglish-search/audio/words/*.mp3</div>
-  </section>
-</main>
+</div>
 
 <script>
-/* ===========================
-   0) 定数・辞書
-   =========================== */
+/* ========================
+   設定：ローカル音源パス
+======================== */
+const VOWEL_BASE = './audio/vowels/'; // 例: ~/youglish-search/audio/vowels/ に commit 済
+const WORD_BASE  = './audio/words/';  // 例: ~/youglish-search/audio/words/ に commit 済
 
-/** 例単語（カテゴリ → 単語[]） */
-const EXAMPLES = {
-  short_a: ["cat","camp","bath","fan"],
-  short_e: ["bed","pen","send","ten"],
-  short_i: ["fit","income","it","bit"],
-  short_o: ["hot","not","lock","top"],
-  short_u: ["cup","sun","luck","bus"],
-  long_e:  ["see","need","bee","eat"],
-  long_i:  ["bike","time","five","ice"],
-  long_o:  ["go","home","note","road"],
-  long_oo: ["food","zoo","too","moon"],
-  short_oo:["book","good","put","look"],
-  ar_sound:["car","start","far","park"],
-  or_sound:["law","caught","call","thought"], /* ɔːr の音価（米:or=ɔːr寄りケース） */
-  er_sound:["bird","learn","girl","her"],
-  ow_sound:["out","cow","now","house"],
-  oi_sound:["boy","join","toy","voice"],
-  aw_sound:["dog","law","caught","fall"], /* ɔ の語（USの /dɔg/ 系もここ） */
-  schwa:   ["about","sofa","support","pencil"]
-};
+/* ========================
+   17母音 定義（正規化・表示・音源・例語）
+   ※ 複合 > 単音 の順に並べる（抽出順に影響）
+======================== */
+const VOWELS = [
+  // r付き複合
+  {id:'ar_sound',  label:'ar sound',  cores:['ɑːr','ɑr'],   display:'ɑːr', file:'ar_sound.mp3',
+   words:['car','park','arm']},
+  {id:'or_sound',  label:'or sound',  cores:['ɔːr'],        display:'ɔːr', file:'or_sound.mp3',
+   words:['or','sort','storm']},
+  {id:'er_sound',  label:'er sound',  cores:['ɝː','ɝ','ɚ'], display:'ɝː', file:'er_sound.mp3',
+   words:['bird','herd','hurt']},
 
-/** カテゴリ → ローカル母音ファイル */
-const CATEGORY_AUDIO = {
-  ar_sound: "ar_sound.mp3",
-  er_sound: "er_sound.mp3",
-  aw_sound: "ow_sound.mp3",   // 「aw系」= ow カテゴリ音源に寄せて再生
-  short_o:  "short_o.mp3",
-  short_a:  "short_a.mp3",
-  short_e:  "short_e.mp3",
-  short_i:  "short_i.mp3",
-  long_e:   "long_e.mp3",
-  short_oo: "short_oo.mp3",
-  long_oo:  "long_oo.mp3",
-  long_o:   "long_o.mp3",
-  long_i:   "long_i.mp3",
-  ow_sound: "ow_sound.mp3",
-  oi_sound: "oi_sound.mp3",
-  or_sound: "or_sound.mp3",
-  short_u:  "short_u.mp3",
-  schwa:    "schwa.mp3"
-};
+  // 二重母音
+  {id:'oi_sound',  label:'oi sound',  cores:['ɔɪ'],         display:'ɔɪ',  file:'oi_sound.mp3',
+   words:['boy','join','voice']},
+  {id:'ow_sound',  label:'ow sound',  cores:['aʊ'],         display:'aʊ',  file:'ow_sound.mp3',
+   words:['out','now','cow']},
+  {id:'long_i',    label:'long i',    cores:['aɪ'],         display:'aɪ',  file:'long_i.mp3',
+   words:['time','line','light']},
+  {id:'long_o',    label:'long o',    cores:['oʊ'],         display:'oʊ',  file:'long_o.mp3',
+   words:['note','no','slow']},
 
-/* 取得 IPA を “母音コア” ごとに切り出す。順序は必ず「長いもの→短いもの」。 */
+  // 長短・単母音
+  {id:'long_e',    label:'long e',    cores:['iː'],         display:'iː',  file:'long_e.mp3',
+   words:['see','eat','need']},
+  {id:'short_i',   label:'short i',   cores:['ɪ'],          display:'ɪ',   file:'short_i.mp3',
+   words:['fit','it','income']},
+  {id:'long_oo',   label:'long oo',   cores:['uː'],         display:'uː',  file:'long_oo.mp3',
+   words:['too','food','zoo']},
+  {id:'short_oo',  label:'short oo',  cores:['ʊ'],          display:'ʊ',   file:'short_oo.mp3',
+   words:['book','look','put']},
+  {id:'aw_sound',  label:'aw sound',  cores:['ɔː','ɔ'],     display:'ɔ',   file:'ow_sound.mp3',
+   words:['law','caught','thought']},
+  {id:'short_o',   label:'short o',   cores:['ɑ'],          display:'ɑ',   file:'short_o.mp3',
+   words:['hot','not','lock']},
+  {id:'short_a',   label:'short a',   cores:['æ'],          display:'æ',   file:'short_a.mp3',
+   words:['cat','camp','bath']},
+  {id:'short_e',   label:'short e',   cores:['e'],          display:'e',   file:'short_e.mp3',
+   words:['get','pen','bed']},
+  {id:'schwa',     label:'schwa',     cores:['ə'],          display:'ə',   file:'schwa.mp3',
+   words:['about','pencil','support']},
+];
+
+/* 抽出に使う正規表現（複合→単音の順で連結） */
 const VOWEL_CORE_RE =
-  /(ɑːr|ɑr|ɔːr|ɝː|ɚ|ɝ|oʊ|eɪ|aɪ|aʊ|ɔɪ|iː|uː|ɪ|ʊ|ɑː|ɑ|æ|e|ʌ|ə|ɔː|ɔ)/g;
+  new RegExp(
+    '(' + VOWELS.flatMap(v => v.cores.sort((a,b)=>b.length-a.length)).join('|') + ')',
+    'g'
+  );
 
-/* IPA の装飾除去（強勢記号や区切り） */
-function stripStress(s){
-  // 1) 正規化で結合文字差を吸収
-  let t = (s||"").normalize('NFC');
-  // 2) 主要アクセント類・ピリオド・空白を除去
-  // 例: ˈ ˌ ː?（長音は残す）・. ・スペース
-  t = t.replace(/[ˈˌ.\s]/g,'');
-  return t;
+/* IPAから強勢記号を除去 */
+const stripStress = s => (s||'').replace(/[ˈˌ]/g,'');
+
+/* IPA文字列を走査して「含まれる全コア配列」を返す */
+function extractCores(ipaText){
+  if(!ipaText) return [];
+  const clean = stripStress(ipaText).normalize('NFC');
+  const found = clean.match(VOWEL_CORE_RE) || [];
+  return found;
 }
 
-/* コア → カテゴリと表示記号（17母音表記） */
-function coreToCategory(core){
-  switch(core){
-    case 'ɑːr': case 'ɑr':         return {cat:'ar_sound',  symbol:'ɑːr'};
-    case 'ɔːr':                    return {cat:'or_sound',  symbol:'ɔːr'};
-    case 'ɝː': case 'ɝ': case 'ɚ':return {cat:'er_sound',  symbol:'ɝː'};
-    case 'ɔː': case 'ɔ':           return {cat:'aw_sound',  symbol:'ɔ'};   // aw
-    case 'ɑː': case 'ɑ':           return {cat:'short_o',   symbol:'ɑ'};   // short o
-    case 'æ':                      return {cat:'short_a',   symbol:'æ'};
-    case 'e':                      return {cat:'short_e',   symbol:'e'};
-    case 'ɪ':                      return {cat:'short_i',   symbol:'ɪ'};
-    case 'iː':                     return {cat:'long_e',    symbol:'iː'};
-    case 'ʊ':                      return {cat:'short_oo',  symbol:'ʊ'};
-    case 'uː':                     return {cat:'long_oo',   symbol:'uː'};
-    case 'oʊ':                     return {cat:'long_o',    symbol:'oʊ'};
-    case 'eɪ':                     return {cat:'long_a',    symbol:'eɪ'};  // （音源 long_a.mp3 有）
-    case 'aɪ':                     return {cat:'long_i',    symbol:'aɪ'};
-    case 'aʊ':                     return {cat:'ow_sound',  symbol:'aʊ'};
-    case 'ɔɪ':                     return {cat:'oi_sound',  symbol:'ɔɪ'};
-    case 'ʌ':                      return {cat:'short_u',   symbol:'ʌ'};
-    case 'ə':                      return {cat:'schwa',     symbol:'ə'};
-    default:                       return null;
-  }
-}
-
-/* 取得 IPA 文字列の “母音コア” を全部拾う */
-function extractCores(ipa){
-  const body = stripStress(ipa);
-  const hits = body.match(VOWEL_CORE_RE) || [];
-  return hits;
-}
-
-/* IPA 表示用：母音コアを赤くハイライト（スラッシュ等はそのまま） */
-function highlightIPA(ipa){
-  if(!ipa) return '—';
-  // 置換は「長いパターンから」にするため、同じ正規表現を使って段階的に
-  let out = ipa.normalize('NFC');
-  const uniqLongFirst = [
-    'ɑːr','ɑr','ɔːr','ɝː','ɚ','ɝ',
-    'oʊ','eɪ','aɪ','aʊ','ɔɪ','iː','uː',
-    'ɪ','ʊ','ɑː','ɑ','æ','e','ʌ','ə','ɔː','ɔ'
-  ];
-  for(const pat of uniqLongFirst){
-    const re = new RegExp(pat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-    out = out.replace(re, m => `<span class="hl">${m}</span>`);
-  }
-  return out;
-}
-
-/* ===========================
-   1) 画面部品ヘルパ
-   =========================== */
-const $ = sel => document.querySelector(sel);
-
-function setIPA(result){
-  $('#ipaText').innerHTML = result.markedIPA || '—';
-  const dictCtl = $('#dictAudioCtl');
-  dictCtl.innerHTML = '';
-  if(result.phAudio){
-    const a = document.createElement('audio');
-    a.controls = true; a.src = result.phAudio; a.preload="none";
-    dictCtl.append(a);
-  }
-}
-
-function setNormalized(ipa, cores){
-  // 正規化表示（赤強調付き）
-  const highlighted = highlightIPA(ipa);
-  $('#normText').innerHTML = highlighted;
-}
-
-function setCats(groups){
-  const area = $('#vowelCats');
-  area.innerHTML = '';
-  for(const g of groups){
-    const chip = document.createElement('div');
-    chip.className = 'chip';
-    const btn = document.createElement('button');
-    btn.className = 'btn';
-    btn.textContent = '再生';
-    const label = document.createElement('span');
-    label.textContent = ' ' + g.label + ' /' + g.symbol + '/';
-    chip.append(btn,label);
-    btn.addEventListener('click', ()=>{
-      const src = `./audio/vowels/${CATEGORY_AUDIO[g.cat]||''}`;
-      const a = new Audio(src);
-      a.play().catch(()=>{});
-    });
-    area.append(chip);
-  }
-}
-
-function setExamples(groups){
-  const box = $('#egArea');
-  box.innerHTML = '';
-  for(const g of groups){
-    const wrap = document.createElement('div');
-    wrap.style.margin='6px 0 10px';
-    const h = document.createElement('div');
-    h.className = 'badge';
-    h.innerHTML = `<strong>${g.label}</strong><span class="small">/${g.symbol}/</span>`;
-    wrap.append(h);
-
-    const row = document.createElement('div');
-    row.className = 'chips';
-    const words = (EXAMPLES[g.cat]||[]).slice(0,4);
-    for(const w of words){
-      const chip = document.createElement('div');
-      chip.className='chip';
-      chip.textContent = w;
-      chip.style.minWidth='80px';
-      chip.addEventListener('click', ()=>{
-        const a = new Audio(`./audio/words/${w}.mp3`);
-        a.play().catch(()=>{});
-      });
-      row.append(chip);
+/* 見つかったコアを 17母音カテゴリへ（重複は1回） */
+function coresToCats(cores){
+  const cats = [];
+  const seen = new Set();
+  cores.forEach(tok=>{
+    for(const v of VOWELS){
+      if(v.cores.includes(tok)){
+        if(!seen.has(v.id)){ seen.add(v.id); cats.push(v); }
+        break;
+      }
     }
-    wrap.append(row);
-    box.append(wrap);
-  }
+  });
+  return cats;
 }
 
-/* ===========================
-   2) 検索 → 辞書取得 → 解析
-   =========================== */
-async function fetchUS(word){
-  // dictionaryapi.dev の US (phonetics[].audio が us 音声 / text が IPA)
+/* 表示用：元のIPAを「コアだけ赤」でハイライト */
+function highlightIPA(ipaText){
+  if(!ipaText) return '—';
+  const clean = ipaText.normalize('NFC');
+  return clean.replace(VOWEL_CORE_RE, m=>`<span class="vred">${m}</span>`);
+}
+
+/* 正規化表示：元IPAの順番で、該当カテゴリの「正規化記号」に置換＆赤 */
+function normalizedIPA(ipaText){
+  if(!ipaText) return '—';
+  let out = stripStress(ipaText).normalize('NFC');
+  // 長いコアから順に、正規化記号にすり替え
+  const pairs = [];
+  VOWELS.forEach(v=>{
+    v.cores
+     .sort((a,b)=>b.length-a.length)
+     .forEach(c=>pairs.push([c, v.display]));
+  });
+  for(const [raw, disp] of pairs){
+    const re = new RegExp(raw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'g');
+    out = out.replace(re, disp);
+  }
+  // 最後にコア部を赤化（display 記号を対象）
+  const dispRe = new RegExp('(' + VOWELS.map(v=>v.display).sort((a,b)=>b.length-a.length).join('|') + ')','g');
+  return out.replace(dispRe, m=>`<span class="vred">${m}</span>`);
+}
+
+/* 例単語のカード群（この単語に含まれるカテゴリのみ表示） */
+function renderExamples(cats){
+  const holder = document.getElementById('examples');
+  holder.innerHTML = '';
+  if(!cats.length){ holder.innerHTML = '<div class="muted">例単語は表示できません。</div>'; return; }
+
+  const frag = document.createDocumentFragment();
+  cats.forEach(v=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+    const h = document.createElement('div');
+    h.className = 'title';
+    h.textContent = v.label + ' /' + v.display + '/';
+    const aud = document.createElement('audio');
+    aud.controls = true;
+    aud.preload = 'none';
+    aud.src = VOWEL_BASE + (v.file || '');
+    const row = document.createElement('div');
+    row.className = 'audrow';
+    row.appendChild(aud);
+
+    // 例単語ボタン＋各 audio
+    const wordsRow = document.createElement('div');
+    wordsRow.className = 'audrow';
+    v.words.forEach(w=>{
+      const pill = document.createElement('button');
+      pill.className = 'pill';
+      pill.textContent = w;
+      pill.addEventListener('click', ()=>{
+        const a = new Audio(WORD_BASE + w + '.mp3');
+        a.play().catch(err=>{
+          alert('音声を再生できませんでした。ローカル音源はブラウザ制約でブロックされることがあります。');
+          console.error(err);
+        });
+      });
+      wordsRow.appendChild(pill);
+    });
+
+    card.appendChild(h);
+    card.appendChild(row);
+    card.appendChild(wordsRow);
+    frag.appendChild(card);
+  });
+  holder.appendChild(frag);
+}
+
+/* カテゴリ一覧（この単語に含まれるものだけ＋各カテゴリの母音再生ボタン） */
+function renderCats(cats){
+  const wrap = document.getElementById('cats');
+  wrap.innerHTML = '';
+  if(!cats.length){ wrap.innerHTML = '<div class="muted">母音カテゴリは検出できませんでした。</div>'; return; }
+
+  const row = document.createElement('div');
+  row.className = 'audrow';
+  cats.forEach(v=>{
+    const b = document.createElement('div');
+    b.className = 'badge';
+    const play = document.createElement('button');
+    play.textContent = '再生';
+    play.addEventListener('click', ()=>{
+      const a = new Audio(VOWEL_BASE + (v.file||''));
+      a.play().catch(err=>{
+        alert('音声を再生できませんでした。ローカル音源はブラウザ制約でブロックされることがあります。');
+        console.error(err);
+      });
+    });
+    const lab = document.createElement('span');
+    lab.textContent = `${v.label} /${v.display}/`;
+    b.appendChild(play);
+    b.appendChild(lab);
+    row.appendChild(b);
+  });
+  wrap.appendChild(row);
+}
+
+/* ==============
+   外部辞書取得
+================= */
+async function fetchIPA(word){
   const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`;
   const res = await fetch(url);
   if(!res.ok) throw new Error('dictionaryapi.dev error');
   const data = await res.json();
-  // 最初のエントリ優先
-  const e = Array.isArray(data) && data[0] ? data[0] : null;
-  if(!e) throw new Error('no entry');
-  const txt = (e.phonetic || (e.phonetics?.find(p=>p.text)?.text) || '').trim();
-  // US 音声（us を直接見つけられない場合は先頭）
-  const usAudio = (e.phonetics||[]).find(p=>/us|american/i.test(p.audio||''))?.audio
-               || (e.phonetics||[]).find(p=>p.audio)?.audio
-               || '';
-  return {ipa: txt || '', phAudio: usAudio || ''};
-}
-
-/* コア集合 → 17母音カテゴリの集合（重複除去＆表示ラベル整形） */
-function coresToGroups(cores){
-  const seen = new Set();
-  const groups = [];
-  for(const c of cores){
-    const info = coreToCategory(c);
-    if(!info) continue;
-    if(seen.has(info.cat)) continue;
-    seen.add(info.cat);
-    // ラベル整形
-    const label = ({
-      ar_sound:'ar sound',
-      er_sound:'er sound',
-      aw_sound:'aw sound',
-      short_o:'short o',
-      short_a:'short a',
-      short_e:'short e',
-      short_i:'short i',
-      long_e:'long e',
-      short_oo:'short oo',
-      long_oo:'long oo',
-      long_o:'long o',
-      long_a:'long a',
-      long_i:'long i',
-      ow_sound:'ow sound',
-      oi_sound:'oi sound',
-      or_sound:'or sound',
-      short_u:'short u',
-      schwa:'schwa'
-    })[info.cat] || info.cat;
-    groups.push({...info,label});
+  // US を優先して IPA と audio
+  let ipa = '';
+  let audio = '';
+  for(const entry of data){
+    const phs = entry?.phonetics || [];
+    // US 音声がある行を優先
+    const us = phs.find(p=>(p?.audio||'').includes('-us.mp3')) || phs.find(p=>p.audio) || null;
+    if(!ipa){
+      ipa = (us?.text || phs.find(p=>p.text)?.text || '').trim();
+    }
+    if(!audio){
+      audio = (us?.audio || phs.find(p=>p.audio)?.audio || '').trim();
+    }
+    if(ipa && audio) break;
   }
-  return groups;
+  return {ipa, audio};
 }
 
-/* 画面更新メイン */
-async function runSearch(){
-  const w = $('#q').value.trim();
-  if(!w) return;
+/* ==============
+   メイン処理
+================= */
+async function run(){
+  const word = (document.getElementById('q').value||'').trim();
+  if(!word) return;
 
-  $('#ipaText').textContent = '読み込み中…';
-  $('#normText').textContent = '—';
-  $('#vowelCats').innerHTML = '';
-  $('#egArea').innerHTML = '';
+  // 初期化
+  document.getElementById('ipaDict').innerHTML = '—';
+  document.getElementById('ipaNorm').innerHTML = '—';
+  document.getElementById('cats').innerHTML = '';
+  document.getElementById('examples').innerHTML = '';
+  document.getElementById('wikilink').href = `https://en.wiktionary.org/wiki/${encodeURIComponent(word)}`;
 
+  // 取得
+  let ipa = '';
+  let audio = '';
   try{
-    const d = await fetchUS(w);
-    const rawIPA = d.ipa || '';
-    const markedIPA = rawIPA ? rawIPA : '—';
-
-    // 1) IPA 強調（辞書表示用）
-    setIPA({markedIPA: highlightIPA(rawIPA), phAudio: d.phAudio});
-
-    // 2) コア抽出 → 正規化表示
-    const cores = extractCores(rawIPA);      // 例: ["æ"]
-    setNormalized(rawIPA, cores);            // IPA 本文中の該当部分が赤になる
-
-    // 3) カテゴリ化（この単語に含まれるもののみ）
-    const groups = coresToGroups(cores);
-    setCats(groups);
-    setExamples(groups);
-  }catch(err){
-    $('#ipaText').textContent = '（取得できませんでした）';
-    $('#normText').textContent = '—';
-    $('#vowelCats').innerHTML = '';
-    $('#egArea').innerHTML = '';
-    console.error(err);
+    const out = await fetchIPA(word);
+    ipa = out.ipa || '';
+    audio = out.audio || '';
+  }catch(e){
+    console.error(e);
   }
+
+  // 1) 辞書IPA（母音コア赤強調）
+  const ipaShown = ipa || '—';
+  document.getElementById('ipaDict').innerHTML = highlightIPA(ipaShown);
+
+  // 2) 正規化＆赤強調表示
+  if(ipa){
+    document.getElementById('ipaNorm').innerHTML = normalizedIPA(ipa);
+  }else{
+    document.getElementById('ipaNorm').innerHTML = '—';
+  }
+
+  // 3) 含まれるカテゴリ（この単語に含まれるものだけ）
+  const cores = extractCores(ipa);
+  const cats = coresToCats(cores);
+  renderCats(cats);
+
+  // 4) 例単語（上で出たカテゴリだけを表示）
+  renderExamples(cats);
+
+  // 5) 辞書音声ボタン
+  const dictBtn = document.getElementById('dictSpeak');
+  const dictAud = document.getElementById('dictAudio');
+  dictAud.src = audio || '';
+  dictBtn.disabled = !audio;
+  dictBtn.onclick = ()=>{
+    if(!dictAud.src){ return; }
+    dictAud.play().catch(err=>{
+      alert('音声を再生できませんでした。ローカル音源はブラウザ制約でブロックされることがあります。');
+      console.error(err);
+    });
+  };
 }
 
-/* ===========================
-   3) UI 配線
-   =========================== */
-$('#searchBtn').addEventListener('click', runSearch);
-$('#q').addEventListener('keydown', e=>{ if(e.key==='Enter') runSearch(); });
-$('#ygBtn').addEventListener('click', ()=>{
-  const w = $('#q').value.trim();
+/* YouGlish ボタン */
+document.getElementById('yg').onclick = ()=>{
+  const w = (document.getElementById('q').value||'').trim();
   if(!w) return;
   window.open(`https://youglish.com/pronounce/${encodeURIComponent(w)}/english/us`, '_blank');
+};
+
+/* イベント */
+document.getElementById('go').addEventListener('click', run);
+document.getElementById('q').addEventListener('keydown', e=>{
+  if(e.key==='Enter') run();
 });
 
-/* 起動時プレフィル（任意） */
-document.addEventListener('DOMContentLoaded', ()=>{
-  const qs = new URL(location.href).searchParams;
-  const v = qs.get('w') || 'cat';
-  $('#q').value = v;
-  runSearch();
-});
+/* 初期フォーカス */
+document.getElementById('q').focus();
 </script>
 </body>
 </html>
