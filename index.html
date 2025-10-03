@@ -109,15 +109,15 @@ const VOWEL_BOOK = [
 ];
 
 const BOOK_BY_KEY = Object.fromEntries(VOWEL_BOOK.map(v=>[v.key,v]));
-const SYMBOL_BY_KEY = Object.fromEntries(VOWEL_BOOK.map(v=>[v.key, v.symbol]));
 
 /* ========== 正規化：ルール ========== */
 const STRESS_RE = /[ˈˌ]/g;
 
 /* トークン抽出（順序重要・長いもの先） */
 const TOKEN_RE = new RegExp([
-  'ɑːr','ɑr','ɔːr','ɔr',        // r連結
-  'ɪə','eə','ʊə','ɛə',          // 中心化（※ 追加: ɛə）
+  'ɑːr','ɑr','ɔːr','ɔr',        // r連結（ar/or）
+  'ɪr','er','ʊr',               // ★ 追加：r直結（ɪr/er/ʊr）→ 分割処理
+  'ɪə','eə','ʊə','ɛə',          // 中心化二重母音
   'oʊ','əʊ',                    // long o
   'aɪ','aʊ','ɔɪ',               // 二重母音
   'iː','uː','ɜːr','ɝː',         // 長母音・r化
@@ -129,15 +129,20 @@ const TOKEN_RE = new RegExp([
 /* トークン→カテゴリ */
 function mapTokenToCat(tok){
   switch(tok){
-    // --- r合流 ---
+    // --- r合流（ar/or） ---
     case 'ɑːr': case 'ɑr': case 'ɑː': return {key:'ar_sound', symbol:'ɑːr'};
     case 'ɔːr': case 'ɔr': case 'ɔː': case 'ɔ': return {key:'or_sound', symbol:'ɔːr'};
+
+    // --- r直結（変換なしで分割） ---
+    case 'ɪr': return ['ɪ','ER'];
+    case 'er': return ['e','ER'];
+    case 'ʊr': return ['ʊ','ER'];
 
     // --- 中心化二重母音 ---
     case 'ɪə': return ['ɪ','ER'];
     case 'eə': return ['e','ER'];
     case 'ʊə': return ['ʊ','ER'];
-    case 'ɛə': return {key:'short_a', symbol:'æ'}; // ★ 追加：æ-raising を short a 扱い
+    case 'ɛə': return {key:'short_a', symbol:'æ'}; // æ-raising を short a 扱い
 
     // --- 長母音／二重母音など ---
     case 'oʊ': case 'əʊ':           return {key:'long_o',   symbol:'oʊ'};
@@ -189,7 +194,8 @@ function normalizeToCats(ipa){
 /* ハイライト（母音だけ赤） */
 const HILITE_RE = new RegExp([
   'ɑːr','ɑr','ɔːr','ɔr',
-  'ɪə','eə','ʊə','ɛə',     // ★ 追加: ɛə
+  'ɪr','er','ʊr',             // ★ 追加
+  'ɪə','eə','ʊə','ɛə',
   'oʊ','əʊ',
   'aɪ','aʊ','ɔɪ',
   'iː','uː','ɜːr','ɝː',
@@ -201,8 +207,13 @@ const HILITE_RE = new RegExp([
 function hiliteIPA(ipaRaw){
   const ipa = ipaRaw.normalize('NFC');
   return ipa.replace(HILITE_RE, (m)=>{
+    // ɪə/eə/ʊə → 母音2つとも赤
     if(m==='ɪə' || m==='eə' || m==='ʊə'){
       return `<span class="vwl">${m[0]}</span><span class="vwl">ə</span>`;
+    }
+    // ɪr/er/ʊr → 母音だけ赤、rは通常色
+    if(m==='ɪr' || m==='er' || m==='ʊr'){
+      return `<span class="vwl">${m[0]}</span>r`;
     }
     return `<span class="vwl">${m}</span>`;
   });
@@ -274,14 +285,14 @@ function renderExamples(cats){
   });
 }
 
-/* ★ 正規化IPAの表示（スペース区切りに修正） */
+/* 正規化IPA表示（スペース区切り） */
 function renderNormIPA(cats){
   if(!cats.length){
     document.getElementById('ipaNorm').innerHTML = '—';
     return;
   }
   const seq = cats.map(c=>c.symbol);
-  const shown = '/' + seq.join(' ') + '/';   // ← ここをスペース区切り
+  const shown = '/' + seq.join(' ') + '/';
   document.getElementById('ipaNorm').innerHTML = hiliteIPA(shown);
 }
 
