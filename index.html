@@ -61,7 +61,6 @@
 /* ===================== ユーティリティ ===================== */
 const stripStress = (s) => s.replace(/[ˈˌ]/g, '');            // 強勢のみ除去
 const stripSlashesSpaces = (s) => s.replace(/[\/\s]/g, '');    // / と空白のみ除去
-const setText = (el, text) => { el.textContent = text; };
 
 /* ===================== “dog は short o（ɑ）” の固定テーブル ===================== */
 /* ここはご要望で明示固定。必要に応じて増やすだけ。 */
@@ -70,6 +69,7 @@ const WORD_OVERRIDE_CORE = {
 };
 
 /* ===================== 17母音抽出＆正規化 ===================== */
+/* ★ 同じ正規表現を「辞書IPAのハイライト」と「コア抽出」の両方で利用 */
 const VOWEL_CORE_RE = /(ɑːr|ɑr|ɝː|ɝ|oʊ|aɪ|aʊ|ɔɪ|ɔː|ɔ|ɑ|æ|e|iː|ɪ|uː|ʊ)/g;
 
 function normalizeCoreTo17(core) {
@@ -98,6 +98,13 @@ function normalizeCoreTo17(core) {
 function extractCoresFromIPA(ipaRaw) {
   const core = stripSlashesSpaces(stripStress(ipaRaw)).normalize('NFC');
   return core.match(VOWEL_CORE_RE) || [];
+}
+
+/* ===================== IPAハイライト（辞書IPAの母音だけ赤） ===================== */
+function highlightVowelsInIPA(rawIPA) {
+  if (!rawIPA) return '—';
+  // そのまま置換（強勢記号やスラッシュは残す／母音部分だけ <span>）
+  return rawIPA.replace(VOWEL_CORE_RE, m => `<span class="highlight">${m}</span>`);
 }
 
 /* ===================== 表示メタ（例単語と母音デモ音） ===================== */
@@ -140,7 +147,9 @@ async function doSearch() {
       ipa = cand?.text || '';
     }
   } catch(e) { console.error(e); }
-  setText(document.getElementById('ipa_raw'), ipa || '—');
+
+  // 1-a) 「辞書IPA」表示（母音だけ赤）
+  document.getElementById('ipa_raw').innerHTML = highlightVowelsInIPA(ipa);
 
   // 2) 抽出 → 正規化（必要なら単語 override を適用）
   let cores = extractCoresFromIPA(ipa);
@@ -149,7 +158,7 @@ async function doSearch() {
 
   const norm = cores.map(c => normalizeCoreTo17(c)).filter(Boolean);
 
-  // 3) 赤字記号表示
+  // 3) 赤字記号表示（正規化後）
   const normHTML = norm.length
     ? norm.map(n => `<span class="highlight">${n.symbol}</span>`).join(' ')
     : '（未分類）';
