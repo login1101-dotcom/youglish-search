@@ -31,8 +31,6 @@
   .cat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
   .pill{display:inline-grid;grid-auto-flow:column;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:#fff}
   audio{height:32px; width: 100%}
-  .kbd{font: 12px/1 ui-monospace,SFMono-Regular,Menlo,Monaco,"Roboto Mono",monospace;background:#f7f7f7;border:1px solid var(--border);padding:2px 6px;border-radius:6px}
-  .src-links a{color:var(--accent);text-decoration:none}
   .code{font-family:ui-monospace,Menlo,Consolas,monospace;background:#f7f7f7;border:1px solid var(--border);padding:2px 6px;border-radius:6px}
 </style>
 </head>
@@ -55,7 +53,7 @@
         <div class="muted">辞書（IPA）</div>
         <div id="ipaDict" class="ipa">—</div>
         <div class="muted src-links">
-          ※ 取得元: dictionaryapi.dev（US）　
+          ※ 取得元: dictionaryapi.dev（US優先選択）　
           <span id="wikilink"></span>
         </div>
       </div>
@@ -107,7 +105,6 @@ const VOWEL_BOOK = [
   {key:'or_sound', label:'or sound',  symbol:'ɔːr',vfile:'or_sound.mp3', ex:['law','caught','storm','sort']},
   {key:'short_u',  label:'short u',   symbol:'ʌ',  vfile:'short_u.mp3',  ex:['cup','but','support']},
 ];
-
 const BOOK_BY_KEY = Object.fromEntries(VOWEL_BOOK.map(v=>[v.key,v]));
 
 /* ========== 正規化：ルール ========== */
@@ -116,12 +113,12 @@ const STRESS_RE = /[ˈˌ]/g;
 /* トークン抽出（順序重要・長いもの先） */
 const TOKEN_RE = new RegExp([
   'ɑːr','ɑr','ɔːr','ɔr',        // r連結（ar/or）
-  'ɪr','er','ʊr',               // ★ 追加：r直結（ɪr/er/ʊr）→ 分割処理
+  'ɪr','er','ʊr',               // r直結（分割対象）
   'ɪə','eə','ʊə','ɛə',          // 中心化二重母音
   'oʊ','əʊ',                    // long o
   'aɪ','aʊ','ɔɪ',               // 二重母音
   'iː','uː','ɜːr','ɝː',         // 長母音・r化
-  'ɑː','ɔː',                    // 長母音（後段で or/ar）
+  'ɑː','ɔː',                    // 長母音
   'ɝ','ɚ','ɜː',                // er 系
   'æ','e','ɛ','ɪ','i','ʊ','ɑ','ɒ','ʌ','ə','ɔ'  // 単母音
 ].join('|'), 'g');
@@ -133,7 +130,7 @@ function mapTokenToCat(tok){
     case 'ɑːr': case 'ɑr': case 'ɑː': return {key:'ar_sound', symbol:'ɑːr'};
     case 'ɔːr': case 'ɔr': case 'ɔː': case 'ɔ': return {key:'or_sound', symbol:'ɔːr'};
 
-    // --- r直結（変換なしで分割） ---
+    // --- r直結（変換無しで分割） ---
     case 'ɪr': return ['ɪ','ER'];
     case 'er': return ['e','ER'];
     case 'ʊr': return ['ʊ','ER'];
@@ -142,7 +139,7 @@ function mapTokenToCat(tok){
     case 'ɪə': return ['ɪ','ER'];
     case 'eə': return ['e','ER'];
     case 'ʊə': return ['ʊ','ER'];
-    case 'ɛə': return {key:'short_a', symbol:'æ'}; // æ-raising を short a 扱い
+    case 'ɛə': return {key:'short_a', symbol:'æ'}; // æ-raising を short a
 
     // --- 長母音／二重母音など ---
     case 'oʊ': case 'əʊ':           return {key:'long_o',   symbol:'oʊ'};
@@ -191,10 +188,10 @@ function normalizeToCats(ipa){
   return cats;
 }
 
-/* ハイライト（母音だけ赤） */
+/* ハイライト（母音だけ赤。ɪr/er/ʊrは母音だけ赤） */
 const HILITE_RE = new RegExp([
   'ɑːr','ɑr','ɔːr','ɔr',
-  'ɪr','er','ʊr',             // ★ 追加
+  'ɪr','er','ʊr',
   'ɪə','eə','ʊə','ɛə',
   'oʊ','əʊ',
   'aɪ','aʊ','ɔɪ',
@@ -207,11 +204,9 @@ const HILITE_RE = new RegExp([
 function hiliteIPA(ipaRaw){
   const ipa = ipaRaw.normalize('NFC');
   return ipa.replace(HILITE_RE, (m)=>{
-    // ɪə/eə/ʊə → 母音2つとも赤
     if(m==='ɪə' || m==='eə' || m==='ʊə'){
       return `<span class="vwl">${m[0]}</span><span class="vwl">ə</span>`;
     }
-    // ɪr/er/ʊr → 母音だけ赤、rは通常色
     if(m==='ɪr' || m==='er' || m==='ʊr'){
       return `<span class="vwl">${m[0]}</span>r`;
     }
@@ -219,23 +214,44 @@ function hiliteIPA(ipaRaw){
   });
 }
 
-/* 辞書API（US） */
+/* ==== 辞書API（US寄りを優先スコアで選択／置換なし） ==== */
 async function fetchIPA(word){
   const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`;
   const r = await fetch(url);
   if(!r.ok) throw new Error('API error');
   const js = await r.json();
+
+  const cands = [];
   for(const entry of js){
     if(entry && Array.isArray(entry.phonetics)){
       for(const ph of entry.phonetics){
-        if(ph && ph.text && /[æɑɔɪʊɝɚɜɛːəoʌi]/.test(ph.text)){
-          return {ipa: ph.text, audio: ph.audio||''};
+        if(ph && ph.text){
+          cands.push({text: ph.text, audio: ph.audio || ''});
         }
       }
     }
-    if(entry && entry.phonetic){ return {ipa: entry.phonetic, audio: ''}; }
+    if(entry && entry.phonetic){
+      cands.push({text: entry.phonetic, audio: ''});
+    }
   }
-  throw new Error('IPA not found');
+  if(!cands.length) throw new Error('IPA not found');
+
+  const score = (p)=>{
+    const t = (p.text||'');
+    const a = (p.audio||'');
+    let s = 0;
+    if(/us/i.test(a) || /-us\.mp3$/i.test(a)) s += 6;   // US音声を強く優先
+    if(a) s += 1;                                      // 音声付きは少し優先
+    if(/oʊ/.test(t)) s += 2; if(/əʊ/.test(t)) s -= 2;  // oʊ(US)優先
+    if(/ɑ/.test(t)) s += 1; if(/ɒ/.test(t)) s -= 1;    // ɑ(US)優先
+    if(/(ɚ|ɝ)/.test(t)) s += 3;                        // r音化母音（US）
+    if(/(ɪr|er|ʊr)/.test(t)) s += 2;                    // rhotic表記優先
+    if(/(ɪə|eə|ʊə)/.test(t)) s -= 1;                    // 非rhoticは少し減点
+    return s;
+  };
+
+  cands.sort((a,b)=>score(b)-score(a));
+  return {ipa: cands[0].text, audio: cands[0].audio};
 }
 
 /* UI描画 */
@@ -285,7 +301,7 @@ function renderExamples(cats){
   });
 }
 
-/* 正規化IPA表示（スペース区切り） */
+/* 正規化IPA（スペース区切り表示） */
 function renderNormIPA(cats){
   if(!cats.length){
     document.getElementById('ipaNorm').innerHTML = '—';
