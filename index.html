@@ -5,7 +5,7 @@
   <title>母音抽出＋例語再生（USのみ・ローカル音源）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    :root { --gap: 14px; --mono:#222; }
+    :root { --gap: 14px; }
     body{font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans",sans-serif;
          line-height:1.6;margin:24px;color:#111}
     h1{font-size:22px;margin:0 0 14px}
@@ -16,10 +16,10 @@
     .card{border:1px solid #eee;border-radius:12px;padding:14px;margin:14px 0}
     .label{font-weight:700;margin-bottom:6px}
     .ipa{font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
-         background:#fafafa;border:1px solid #eee;border-radius:8px;padding:6px 10px;display:inline-block}
+         background:#fafafa;border:1px solid #eee;border-radius:8px;padding:6px 10px;display:inline-block;min-width:120px}
     .highlight{color:#c40000;font-weight:700}
     .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-    .chip{border:1px solid #ddd;border-radius:999px;padding:6px 10px;background:#fff}
+    .chip{border:1px solid #ddd;border-radius:999px;padding:8px 12px;background:#fff}
     audio{display:block;margin-top:6px;max-width:380px}
     .muted{color:#666;font-size:12px}
   </style>
@@ -42,7 +42,7 @@
   <div class="card">
     <div class="label">発音記号（17母音に正規化＆赤色強調）</div>
     <div class="ipa" id="ipa_norm">—</div>
-    <div class="muted">※ 取得IPAから母音コア（ɝ, ɔː, ɑ など）だけ抽出し、指定17カテゴリへマッピング。</div>
+    <div class="muted">※ 取得 IPA から母音コア（ɝ, ɔː, ɑ など）だけ抽出→指定 17 カテゴリへマップ。</div>
   </div>
 
   <div class="card">
@@ -59,31 +59,28 @@
 
 <script>
 /* ===================== ユーティリティ ===================== */
-// 強勢記号だけ除去（ˈ ˌ）。スラッシュ / は別で除去。
-const stripStress = (s) => s.replace(/[ˈˌ]/g, '');
-// / と空白を落とす（※ æ などは絶対に触らない）
-const stripSlashesSpaces = (s) => s.replace(/[\/\s]/g, '');
-
-// IPA を安全に表示（innerText 相当）
+const stripStress = (s) => s.replace(/[ˈˌ]/g, '');            // 強勢のみ除去
+const stripSlashesSpaces = (s) => s.replace(/[\/\s]/g, '');    // / と空白のみ除去
 const setText = (el, text) => { el.textContent = text; };
 
-/* ===================== 17母音の抽出＆正規化 ===================== */
-/**
- * 抽出順序は「複合が先」。例: ɑːr / ɑr（ar）, ɝː / ɝ（er）, 二重母音 oʊ aɪ aʊ ɔɪ …を先に。
- * ここで拾う“コア”だけを後段で 17 母音カテゴリへマップ。
- */
+/* ===================== “dog は short o（ɑ）” の固定テーブル ===================== */
+/* ここはご要望で明示固定。必要に応じて増やすだけ。 */
+const WORD_OVERRIDE_CORE = {
+  dog: 'ɑ',   // dog は必ず ɑ（short o）
+};
+
+/* ===================== 17母音抽出＆正規化 ===================== */
 const VOWEL_CORE_RE = /(ɑːr|ɑr|ɝː|ɝ|oʊ|aɪ|aʊ|ɔɪ|ɔː|ɔ|ɑ|æ|e|iː|ɪ|uː|ʊ)/g;
 
-/** 17母音マップ（出力記号は要望に合わせて確定版） */
 function normalizeCoreTo17(core) {
   switch (core) {
     case 'ɑːr':
     case 'ɑr': return { cat: 'ar_sound',  symbol: 'ɑːr'  };   // car
     case 'ɝː':
-    case 'ɝ':  return { cat: 'er_sound',  symbol: 'ɝː'  };   // bird（米語 r 音色）
+    case 'ɝ':  return { cat: 'er_sound',  symbol: 'ɝː'  };   // bird
     case 'ɔː':
-    case 'ɔ':  return { cat: 'aw_sound',  symbol: 'ɔ'    };   // caught, dog(ɔ) 系
-    case 'ɑ':  return { cat: 'short_o',   symbol: 'ɑ'    };   // not(米), dog(ɑ) 系
+    case 'ɔ':  return { cat: 'aw_sound',  symbol: 'ɔ'    };   // caught, law
+    case 'ɑ':  return { cat: 'short_o',   symbol: 'ɑ'    };   // hot, not, lock, dog(固定)
     case 'æ':  return { cat: 'short_a',   symbol: 'æ'    };   // cat
     case 'e':  return { cat: 'short_e',   symbol: 'e'    };   // bed
     case 'ɪ':  return { cat: 'short_i',   symbol: 'ɪ'    };   // sit
@@ -98,16 +95,16 @@ function normalizeCoreTo17(core) {
   }
 }
 
-/** 文字列から母音コア配列を返す */
-function extractCores(ipaRaw) {
+function extractCoresFromIPA(ipaRaw) {
   const core = stripSlashesSpaces(stripStress(ipaRaw)).normalize('NFC');
   return core.match(VOWEL_CORE_RE) || [];
 }
 
-/* ===================== 表示用データ ===================== */
+/* ===================== 表示メタ（例単語と母音デモ音） ===================== */
+/* ★ dog を aw_sound 側から外し、short_o 側は hot/not/lock に統一 */
 const VOWEL_META = {
   short_a : { audio:'audio/vowels/short_a.mp3',  examples:['cat','camp','bath'] },
-  short_o : { audio:'audio/vowels/short_o.mp3',  examples:['dog','not','hot'] },
+  short_o : { audio:'audio/vowels/short_o.mp3',  examples:['hot','not','lock'] },
   short_e : { audio:'audio/vowels/short_e.mp3',  examples:['bed','pen','red'] },
   short_i : { audio:'audio/vowels/short_i.mp3',  examples:['sit','hit','fish'] },
   long_e  : { audio:'audio/vowels/long_e.mp3',   examples:['see','green','believe'] },
@@ -118,48 +115,47 @@ const VOWEL_META = {
   ow_sound: { audio:'audio/vowels/ow_sound.mp3', examples:['now','out','down'] },
   oi_sound: { audio:'audio/vowels/oi_sound.mp3', examples:['boy','coin','voice'] },
   er_sound: { audio:'audio/vowels/er_sound.mp3', examples:['bird','hurt','learn'] },
-  aw_sound: { audio:'audio/vowels/aw_sound.mp3', examples:['caught','dog','law'] },
+  aw_sound: { audio:'audio/vowels/aw_sound.mp3', examples:['caught','law','saw'] },
   ar_sound: { audio:'audio/vowels/ar_sound.mp3', examples:['car','art','mark'] },
 };
 
-/* ===================== 検索メイン ===================== */
+/* ===================== メイン処理 ===================== */
 async function doSearch() {
   const q = document.getElementById('q').value.trim();
   if (!q) return;
 
-  // YouGlish ボタン
   document.getElementById('yg').onclick = () => {
     const url = `https://youglish.com/pronounce/${encodeURIComponent(q)}/english/us`;
     window.open(url, '_blank');
   };
 
-  // dictionaryapi.dev（US）から IPA 取得
+  // 1) IPA 取得
   let ipa = '';
   try {
     const r = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(q)}`);
     const j = await r.json();
     if (Array.isArray(j) && j[0]?.phonetics?.length) {
-      // US っぽいもの（audio に us を含む、または sourceUrl に /en/）を優先
       const phon = j[0].phonetics;
       const cand = phon.find(p => (p.audio||'').includes('-us')) || phon.find(p=>p.text) || phon[0];
       ipa = cand?.text || '';
     }
-  } catch(e) {
-    console.error(e);
-  }
+  } catch(e) { console.error(e); }
   setText(document.getElementById('ipa_raw'), ipa || '—');
 
-  // 正規化＆表示
-  const cores = extractCores(ipa);
+  // 2) 抽出 → 正規化（必要なら単語 override を適用）
+  let cores = extractCoresFromIPA(ipa);
+  const ovCore = WORD_OVERRIDE_CORE[q.toLowerCase()];
+  if (ovCore) { cores = [ovCore]; } // ★ dog は必ず ɑ（short o）
+
   const norm = cores.map(c => normalizeCoreTo17(c)).filter(Boolean);
 
-  // 赤字 IPA（シンボル列）
+  // 3) 赤字記号表示
   const normHTML = norm.length
     ? norm.map(n => `<span class="highlight">${n.symbol}</span>`).join(' ')
     : '（未分類）';
   document.getElementById('ipa_norm').innerHTML = normHTML;
 
-  // カテゴリ（重複除去）
+  // 4) カテゴリごとの母音デモ音
   const cats = [...new Set(norm.map(n => n.cat))];
   const catsWrap = document.getElementById('cats');
   catsWrap.innerHTML = '';
@@ -175,7 +171,7 @@ async function doSearch() {
     catsWrap.appendChild(el);
   });
 
-  // 例単語＋ローカル音声
+  // 5) 例単語（クリックで words/*.mp3 再生）
   const exWrap = document.getElementById('examples');
   exWrap.innerHTML = '';
   cats.forEach(cat => {
@@ -193,14 +189,10 @@ async function doSearch() {
   });
 }
 
-/* ===================== 起動時イベント ===================== */
+/* ===================== 起動時 ===================== */
 document.getElementById('btn').addEventListener('click', doSearch);
-document.getElementById('q').addEventListener('keydown', (e)=>{
-  if (e.key === 'Enter') doSearch();
-});
-
-// 初回デモ
-document.getElementById('q').value = 'cat';
+document.getElementById('q').addEventListener('keydown', (e)=>{ if (e.key === 'Enter') doSearch(); });
+document.getElementById('q').value = 'dog';   // 動作確認用
 doSearch();
 </script>
 </body>
