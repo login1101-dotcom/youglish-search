@@ -4,10 +4,25 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<!-- キャッシュ無効化（1回のリロードで反映） -->
+<!-- キャッシュ無効化（ブラウザ用） -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
+
+<!-- ★キャッシュバスター（HTML内容のハッシュをURL ?v= に付与してCDNキャッシュを確実回避） -->
+<script id="__ver__">
+(function(){
+  const t = document.currentScript.textContent;
+  let h = 0;
+  for(let i=0;i<t.length;i++){ h = ((h<<5)-h) + t.charCodeAt(i); h |= 0; }
+  const v = (h>>>0).toString(16);
+  const u = new URL(location.href);
+  if(u.searchParams.get('v') !== v){
+    u.searchParams.set('v', v);
+    location.replace(u.toString());
+  }
+})();
+</script>
 
 <title>母音抽出＋例語再生（USのみ・ローカル音源）</title>
 <style>
@@ -89,7 +104,6 @@
 
 <script>
 /* ===== 17母音仕様（er sound は /ɝː/ 表記に統一） ===== */
-
 const CATEGORY_ORDER = [
   "short i","long e","short e","short a","long a",
   "short oo","long u","short o","long o",
@@ -208,7 +222,6 @@ const SPECIAL_SPLIT = {
   "ɪr": ["short i","er sound"], "ɪɹ": ["short i","er sound"],
   "er": ["short e","er sound"],   "eɹ": ["short e","er sound"],
   "ʊr": ["short oo","er sound"],  "ʊɹ": ["short oo","er sound"],
-
   // æ + r は ar sound（辞書ゆらぎ対策）
   "ær": ["ar sound"], "æɹ": ["ar sound"]
 };
