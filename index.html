@@ -38,14 +38,14 @@
 <body>
 <header><h1>母音抽出＋例語再生（USのみ・ローカル音源）</h1></header>
 <div class="wrap">
-  <!-- 検索窓は維持 -->
+  <!-- 検索窓 -->
   <div class="srch">
     <input id="q" placeholder="単語（例: dog, camp, centrifuge, cure, near ...）" />
     <button class="btn primary" id="btn">検索</button>
     <button class="btn" id="yg">YouGlishで開く</button>
   </div>
 
-  <!-- 検索窓の直下に「辞書IPA（左）」と「正規化IPA（右）」を横並び表示 -->
+  <!-- 辞書IPA（左） + 正規化IPA（右） -->
   <section class="sec" id="sec-ipa-norm">
     <div class="row">
       <div class="col">
@@ -85,8 +85,7 @@
 </div>
 
 <script>
-/* ===== 17母音仕様（er sound は必ず /ɝː/ で表示） ===== */
-
+/* ===== 17母音仕様（er sound は必ず /ɝː/ 表記） ===== */
 const CATEGORY_ORDER = [
   "short i","long e","short e","short a","long a",
   "short oo","long u","short o","long o",
@@ -107,7 +106,7 @@ const CATEGORY_LABELS = {
   "long o": "oʊ",
   "ar sound": "ɑːr",
   "or sound": "ɔːr",
-  "er sound": "ɝː",   // 統一表記
+  "er sound": "ɝː",
   "ai sound": "aɪ",
   "au sound": "aʊ",
   "oi sound": "ɔɪ",
@@ -127,7 +126,6 @@ const IPA_TO_CATEGORY = {
 
   // short o 系
   "ɑ": "short o",
-  "ɑː": "short o",
   "ɒ": "short o",
   "ɔ": "short o",
 
@@ -135,7 +133,7 @@ const IPA_TO_CATEGORY = {
   "oʊ": "long o",
   "əʊ": "long o",
 
-  // r 付き
+  // r 付き（ar/or/er）
   "ɑr": "ar sound", "ɑːr": "ar sound",
   "ɔr": "or sound", "ɔːr": "or sound",
   "ɝ": "er sound", "ɝː": "er sound", "ɚ": "er sound", "ɜː": "er sound",
@@ -148,7 +146,7 @@ const IPA_TO_CATEGORY = {
   // 弱母音
   "ə": "schwa",
 
-  // æ-raising を short a に吸収
+  // æ-raising → short a
   "eə": "short a",
   "ɛə": "short a"
 };
@@ -161,7 +159,7 @@ const SPECIAL_SPLIT = {
   "ɛə": ["short a"]
 };
 
-/* ===== 付随データ（音声・例語） ===== */
+/* ===== カテゴリ音声・例語 ===== */
 const CATEGORY_AUDIO = {
   "short i":"short_i.mp3",
   "long e":"long_e.mp3",
@@ -204,19 +202,12 @@ const CATEGORY_EXAMPLES = {
 
 /* ===== トークン化・ハイライト ===== */
 const STRESS_RE = /[ˈˌ]/g;
-
 const TOKEN_RE = new RegExp([
-  // r連結（長→短）
   'ɑːr','ɑr','ɔːr','ɔr',
-  // 中心化二重母音（æ-raising含む）
   'iə','eə','ʊə','ɛə',
-  // 二重母音
   'oʊ','əʊ','aɪ','aʊ','ɔɪ',
-  // 長母音・r化母音
   'iː','uː','ɝː','ɝ','ɚ','ɜː',
-  // 長音記号付き
   'ɑː','ɔː','eɪ',
-  // 単母音
   'æ','ɪ','i','ʊ','u','ɛ','ɑ','ɒ','ʌ','ə','ɔ'
 ].join('|'),'g');
 
@@ -224,7 +215,6 @@ function tokenize(ipaRaw){
   const core = (ipaRaw||'').normalize('NFC').replace(STRESS_RE,'');
   return core.match(TOKEN_RE) || [];
 }
-
 function tokensToCategories(tokens){
   const out = [];
   const seen = new Set();
@@ -232,14 +222,13 @@ function tokensToCategories(tokens){
     const parts = SPECIAL_SPLIT[t] ?? [IPA_TO_CATEGORY[t]];
     for(const cat of parts){
       if(!cat) continue;
-      if(seen.has(cat)) continue;        // 重複回避
+      if(seen.has(cat)) continue;
       seen.add(cat);
       out.push({cat, sym: CATEGORY_LABELS[cat] || ''});
     }
   }
   return out;
 }
-
 const HILITE_RE = TOKEN_RE;
 function hiliteIPA(ipaRaw){
   if(!ipaRaw) return '—';
@@ -261,7 +250,6 @@ function renderNormIPA(catObjs){
   const seq = catObjs.map(o=>o.sym);
   document.getElementById('ipaNorm').innerHTML = hiliteIPA('/' + seq.join(' ') + '/');
 }
-
 function renderCats(catObjs){
   const present = new Set(catObjs.map(o=>o.cat));
   const ordered = CATEGORY_ORDER.filter(c=>present.has(c));
@@ -279,7 +267,6 @@ function renderCats(catObjs){
     wrap.appendChild(el);
   }
 }
-
 function renderExamples(catObjs){
   const keys = new Set(catObjs.map(o=>o.cat));
   const tgt = document.getElementById('examples');
@@ -309,13 +296,12 @@ function renderExamples(catObjs){
   });
 }
 
-/* ===== 辞書API（US寄り優先） ===== */
+/* ===== 辞書API ===== */
 async function fetchIPA(word){
   const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`;
   const r = await fetch(url);
   if(!r.ok) throw new Error('API error');
   const js = await r.json();
-
   const cands = [];
   for(const entry of js){
     if(entry && Array.isArray(entry.phonetics)){
@@ -330,7 +316,6 @@ async function fetchIPA(word){
     }
   }
   if(!cands.length) throw new Error('IPA not found');
-
   const score = (p)=>{
     const t = (p.text||'');
     const a = (p.audio||'');
@@ -342,7 +327,6 @@ async function fetchIPA(word){
     if(/(ɚ|ɝ)/.test(t)) s += 3;
     return s;
   };
-
   cands.sort((a,b)=>score(b)-score(a));
   return {ipa: cands[0].text, audio: cands[0].audio};
 }
@@ -351,20 +335,16 @@ async function fetchIPA(word){
 async function run(){
   const q = document.getElementById('q').value.trim();
   if(!q) return;
-
   document.getElementById('yg').onclick = ()=>{
     const u = `https://youglish.com/pronounce/${encodeURIComponent(q)}/english/us`;
     window.open(u,'_blank');
   };
-
   let ipa='', audioUrl='';
   try{
     const {ipa:ipaRaw, audio} = await fetchIPA(q);
     ipa = ipaRaw || '';
     audioUrl = audio || '';
   }catch(e){ ipa=''; }
-
-  // 左：辞書IPA
   document.getElementById('ipaDict').innerHTML = ipa ? hiliteIPA(ipa) : '—';
   const dictAudio = document.getElementById('dictAudio');
   document.getElementById('playDict').onclick = ()=>{
@@ -374,13 +354,9 @@ async function run(){
   };
   document.getElementById('wikilink').innerHTML =
     `<a target="_blank" rel="noopener" href="https://en.wiktionary.org/wiki/${encodeURIComponent(q)}">Wiktionary</a>`;
-
-  // 右：正規化IPA
   const toks = tokenize(ipa);
   const catObjs = tokensToCategories(toks);
   renderNormIPA(catObjs);
-
-  // 下部セクション
   renderCats(catObjs);
   renderExamples(catObjs);
 }
@@ -390,9 +366,4 @@ document.getElementById('btn').addEventListener('click', run);
 document.getElementById('q').addEventListener('keydown', (e)=>{ if(e.key==='Enter') run(); });
 document.addEventListener('DOMContentLoaded', ()=>{
   const params = new URL(location.href).searchParams;
-  const w = params.get('w') || '';
-  if(w){ document.getElementById('q').value = w; run(); }
-});
-</script>
-</body>
-</html>
+  const
