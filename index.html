@@ -1,1 +1,183 @@
-~/clip_deploy.sh
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>母音抽出＋例語再生（Wiktionary / dictionaryapi.dev / Oxford / 正規化）</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", sans-serif; margin: 20px; }
+    h1 { font-size: 18px; margin: 0 0 8px; }
+    .row { display: flex; gap: 8px; margin-bottom: 12px; }
+    input[type="text"] { flex: 1; padding: 8px 10px; font-size: 16px; }
+    button { padding: 8px 14px; font-size: 14px; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #e5e7eb; padding: 10px; vertical-align: top; }
+    th { background: #f8fafc; text-align: left; }
+    code { background: #f3f4f6; padding: 2px 4px; border-radius: 4px; }
+    .note { color:#6b7280; font-size:12px; }
+  </style>
+</head>
+<body>
+  <h1>母音抽出＋例語再生（USのみ・ローカル音源）</h1>
+
+  <div class="row">
+    <input id="word" type="text" placeholder="単語（例: dog, camp, are, cat ...）" />
+    <button id="searchBtn">検索</button>
+  </div>
+
+  <div class="note">IPA比較（左:Wiktionary / 中:dictionaryapi.dev / 中右:Oxford / 右:正規化〔17母音〕）</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:25%">Wiktionary</th>
+        <th style="width:25%">dictionaryapi.dev</th>
+        <th style="width:25%">Oxford</th>
+        <th style="width:25%">正規化</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td id="wiktionaryCell">—</td>
+        <td id="freeDictCell">—</td>
+        <td id="oxfordCell">—</td>
+        <td id="normalizedCell">—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <pre id="debug" style="white-space:pre-wrap;margin-top:12px;color:#64748b;"></pre>
+
+  <script>
+    // === 必要ならここを書き換え ===
+    const OXFORD_APP_ID  = "あなたのAPP_ID";
+    const OXFORD_APP_KEY = "あなたのAPP_KEY";
+
+    const $ = sel => document.querySelector(sel);
+    const set = (id, text) => { document.getElementById(id).textContent = text || "—"; };
+
+    // ---- Wiktionary（簡易）: IPA を英語節から拾う（失敗時は "—"）
+    async function fetchWiktionary(word) {
+      try {
+        // MediaWiki API で wikitext を取って IPA をざっくり抽出（簡易）
+        const url = `https://en.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(word)}&prop=wikitext&format=json&origin=*`;
+        const res = await fetch(url);
+        if (!res.ok) return "—";
+        const data = await res.json();
+        const text = data?.parse?.wikitext?.["*"] || "";
+        // /IPA\|[^}]+/ を雑に抜く（複数拾って / ... / だけを並べる）
+        const ipaMatches = [...text.matchAll(/IPA\|([^}\n]+)/g)].map(m => m[1]);
+        if (!ipaMatches.length) return "—";
+        // /.../ の部分だけ整形
+        const forms = ipaMatches
+          .join(" / ")
+          .match(/\/[^\/]+\/+/g);
+        if (!forms || !forms.length) return "—";
+        return Array.from(new Set(forms.map(s => s.replace(/\s+/g, "")))).join(" ");
+      } catch {
+        return "—";
+      }
+    }
+
+    // ---- Free Dictionary API (dictionaryapi.dev)
+    async function fetchFreeDict(word) {
+      try {
+        const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`;
+        const res = await fetch(url);
+        if (!res.ok) return "—";
+        const json = await res.json();
+        // phonetics[].text に /kæt/ 形式が入ることが多い
+        const ipas = [];
+        (json || []).forEach(entry => {
+          (entry.phonetics || []).forEach(p => {
+            if (p.text && /\/.+\//.test(p.text)) ipas.push(p.text.trim());
+          });
+        });
+        if (!ipas.length) return "—";
+        return Array.from(new Set(ipas)).join(" ");
+      } catch {
+        return "—";
+      }
+    }
+
+    // ---- Oxford API（US/UKの dialects 付き）
+    async function fetchOxford(word) {
+      try {
+        if (!OXFORD_APP_ID || !OXFORD_APP_KEY) return "—";
+        const url = `https://od-api.oxforddictionaries.com/api/v2/entries/en-us/${encodeURIComponent(word.toLowerCase())}`;
+        const res = await fetch(url, {
+          headers: {
+            "app_id": OXFORD_APP_ID,
+            "app_key": OXFORD_APP_KEY
+          }
+        });
+        if (!res.ok) return "—";
+        const data = await res.json();
+        const ipas = [];
+        (data.results || []).forEach(r => {
+          (r.lexicalEntries || []).forEach(lex => {
+            (lex.entries || []).forEach(e => {
+              (e.pronunciations || []).forEach(p => {
+                const ipa = p.phoneticSpelling;
+                const dia = (p.dialects || []).join(",");
+                if (ipa) {
+                  ipas.push(dia ? `${dia}:${ipa}` : ipa);
+                }
+              });
+            });
+          });
+        });
+        if (!ipas.length) return "—";
+        // 重複排除しつつ US/UK を見やすく
+        const uniq = Array.from(new Set(ipas));
+        // 例: "American English:/kæt/" "British English:/kæt/"
+        return uniq.join("  |  ");
+      } catch {
+        return "—";
+      }
+    }
+
+    // ---- 17音 正規化（超簡易：記号だけ見るダミー版。必要に応じて差し替えてください）
+    function normalizeIPA(rawIpa) {
+      if (!rawIpa || rawIpa === "—") return "—";
+      // 例: /æ/ を short a, /ɑ/ を short o など…（ここはタツヤさんの既存ルールに合わせて後で置換）
+      // 今は最低限の表示だけ
+      return rawIpa;
+    }
+
+    async function run() {
+      const word = $("#word").value.trim();
+      if (!word) return;
+
+      set("wiktionaryCell", "…");
+      set("freeDictCell",   "…");
+      set("oxfordCell",     "…");
+      set("normalizedCell", "…");
+      $("#debug").textContent = "";
+
+      const [wik, free, oxford] = await Promise.all([
+        fetchWiktionary(word),
+        fetchFreeDict(word),
+        fetchOxford(word)
+      ]);
+
+      set("wiktionaryCell", wik);
+      set("freeDictCell",   free);
+      set("oxfordCell",     oxford);
+
+      // 正規化は「Oxford優先 → なければ dictionaryapi.dev → Wiktionary」
+      const base = (oxford !== "—" ? oxford : (free !== "—" ? free : wik));
+      set("normalizedCell", normalizeIPA(base));
+
+      // デバッグ表示（必要なら）
+      $("#debug").textContent = `Wiktionary: ${wik}\nFreeDict: ${free}\nOxford: ${oxford}`;
+    }
+
+    // いつもの操作性：Enterで検索
+    $("#searchBtn").addEventListener("click", run);
+    $("#word").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
+
+    // ページ初期表示：前回みたいに空表示を維持
+  </script>
+</body>
+</html>
