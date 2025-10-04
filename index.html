@@ -4,12 +4,10 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<!-- キャッシュ無効化（ブラウザ） -->
+<!-- キャッシュ無効化（1回の更新で反映） -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-
-<!-- 一度だけ自動で ?v=timestamp を付けて再読込（CDN/ブラウザキャッシュ回避） -->
 <script>
   (function(){
     const u = new URL(location.href);
@@ -55,7 +53,6 @@
 <body>
 <header><h1>母音抽出＋例語再生（USのみ・ローカル音源）</h1></header>
 <div class="wrap">
-  <!-- 検索窓 -->
   <div class="srch">
     <input id="q" placeholder="単語（例: are, is, car, dog, camp, cure, near ...）" />
     <button class="btn primary" id="btn" type="button">検索</button>
@@ -66,7 +63,7 @@
   <section class="sec" id="sec-ipa-norm">
     <div class="row">
       <div class="col">
-        <div class="muted">辞書（IPA）</div>
+        <div class="muted">辞書（IPA・US正規化済）</div>
         <div id="ipaDict" class="ipa">—</div>
         <div class="muted src-links" style="margin-top:8px">
           ※ 取得元: dictionaryapi.dev（US優先選択）　<span id="wikilink"></span>
@@ -145,7 +142,6 @@ const IPA_TO_CATEGORY = {
   "ə":"schwa","eə":"short a","ɛə":"short a"
 };
 
-/* r直結の分解（母音 + er sound） */
 const SPECIAL_SPLIT = {
   "iə":["short i","er sound"],
   "ʊə":["short oo","er sound"],
@@ -156,14 +152,23 @@ const SPECIAL_SPLIT = {
 
 const STRESS_RE = /[ˈˌ]/g;
 
-/* ★前処理：
-   1) ɹ→r
-   2) æ + r を強制的に ɑr へ（are/care 等の誤分類を防止）
-   3) ar/or をひとかたまりに正規化 */
+/* ===== 変な（BrE寄り/非US）表記を拾わない & USへ矯正 ===== */
+function sanitizeIPA(t){
+  return (t||'').normalize('NFC')
+    .replace(/ɹ/g,'r')         // ɹ → r
+    .replace(/ɛər/g,'ɑr')      // care 系の BrE: ɛə̯r → ɑr
+    .replace(/eər/g,'ɑr')
+    .replace(/æː?r/g,m=>m.includes('ː')?'ɑːr':'ɑr') // æ + r → ɑr
+    .replace(/ɪə/g,'ɪr')       // near BrE → US
+    .replace(/ʊə/g,'ʊr')       // cure BrE → US
+    .replace(/əʊ/g,'oʊ')       // BrE long o → US
+    .replace(/ɒ/g,'ɑ')         // BrE short o → US
+    .replace(/ɜːr/g,'ɝː');     // er sound を US 記号へ
+}
+
+/* rhotic の結合（sanitize 後の最終整形） */
 function precomposeRhotic(ipaRaw){
-  return (ipaRaw||'').normalize('NFC')
-    .replace(/ɹ/g,'r')
-    .replace(/æː?r/g, m => m.includes('ː') ? 'ɑːr' : 'ɑr')  // ← ここが今回のキモ
+  return sanitizeIPA(ipaRaw)
     .replace(/ɑː?r/g, m => m.includes('ː') ? 'ɑːr' : 'ɑr')
     .replace(/ɔː?r/g, m => m.includes('ː') ? 'ɔːr' : 'ɔr');
 }
@@ -263,26 +268,39 @@ function renderExamples(catObjs){
   });
 }
 
-/* 辞書API（US寄り優先） */
+/* 辞書API（US寄り・変な表記を排除） */
 async function fetchIPA(word){
   const r = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
   if(!r.ok) throw new Error('API error');
   const js = await r.json();
+
   const cands=[];
   for(const e of js){
     if(e && Array.isArray(e.phonetics)){
-      for(const p of e.phonetics){ if(p && p.text) cands.push({text:p.text, audio:p.audio||''}); }
+      for(const p of e.phonetics){
+        if(p && p.text){
+          const t = sanitizeIPA(p.text);                // ★ここでUS正規化
+          if(!/[ɛə]|eə/.test(p.text) || /ɑr|ɑːr|ɝ|ɚ/.test(t)) { // ★変な表記だけの候補は落とす
+            cands.push({text:t, audio:p.audio||''});
+          }
+        }
+      }
     }
-    if(e && e.phonetic){ cands.push({text:e.phonetic, audio:''}); }
+    if(e && e.phonetic){
+      const t = sanitizeIPA(e.phonetic);
+      cands.push({text:t, audio:''});
+    }
   }
   if(!cands.length) throw new Error('IPA not found');
+
   const score = (p)=>{
     const t=p.text||'', a=p.audio||''; let s=0;
     if(/us/i.test(a) || /-us\.mp3$/i.test(a)) s+=6;
     if(a) s+=1;
-    if(/oʊ/.test(t)) s+=2; if(/əʊ/.test(t)) s-=2;
-    if(/ɑ/.test(t)) s+=1; if(/ɒ/.test(t)) s-=1;
-    if(/[ɚɝrɹ]/.test(t)) s+=2;
+    if(/oʊ/.test(t)) s+=2;
+    if(/ɑ/.test(t)) s+=1;
+    if(/[ɚɝ]|\b[ɑɔ]r\b/.test(t)) s+=3;  // rhotic/US強化
+    if(/ɛə|eə/.test(t)) s-=5;            // BrE 的な変な表記は強く減点
     return s;
   };
   cands.sort((a,b)=>score(b)-score(a));
@@ -313,10 +331,8 @@ async function run(){
   document.getElementById('wikilink').innerHTML =
     `<a target="_blank" rel="noopener" href="https://en.wiktionary.org/wiki/${encodeURIComponent(q)}">Wiktionary</a>`;
 
-  const cats=tokensToCategories(tokenize(ipa));
+  let catObjs=tokensToCategories(tokenize(ipa));
 
-  // フォールバック（何も拾えなかったときでも単母音は拾う：例 is）
-  let catObjs=cats;
   if(!catObjs.length && ipa){
     const fallback=(precomposeRhotic(ipa).match(/[æɪiʊuɛɑɒʌəɔ]/g)||[])
       .map(t=>IPA_TO_CATEGORY[t]).filter(Boolean);
