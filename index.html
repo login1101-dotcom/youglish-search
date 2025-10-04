@@ -59,11 +59,11 @@
     <button class="btn" id="yg" type="button">YouGlishで開く</button>
   </div>
 
-  <!-- 辞書IPA（左・US正規化済） + 正規化IPA（右・17母音） -->
+  <!-- 辞書IPA（左・US最良候補） + 正規化IPA（右・17母音） -->
   <section class="sec" id="sec-ipa-norm">
     <div class="row">
       <div class="col">
-        <div class="muted">辞書（IPA・US正規化済）</div>
+        <div class="muted">辞書（IPA・US最良候補）</div>
         <div id="ipaDict" class="ipa">—</div>
         <div class="muted src-links" style="margin-top:8px">
           ※ 取得元: dictionaryapi.dev（US優先選択）　<span id="wikilink"></span>
@@ -144,10 +144,10 @@ const IPA_TO_CATEGORY = {
 
 /* r直結・中心化二重母音の分解（US想定） */
 const SPECIAL_SPLIT = {
-  "iə":["short i","er sound"],   // near (BrE) → ɪ + er
-  "eə":["short e","er sound"],   // fairy/wear(BrE) → ɛ + er
+  "iə":["short i","er sound"],
+  "eə":["short e","er sound"],
   "ɛə":["short e","er sound"],
-  "ʊə":["short oo","er sound"],  // cure/tour (BrE) → ʊ + er
+  "ʊə":["short oo","er sound"],
   "ɪr":["short i","er sound"], "ɪɹ":["short i","er sound"],
   "er":["short e","er sound"],  "eɹ":["short e","er sound"],
   "ɛr":["short e","er sound"],  "ɛɹ":["short e","er sound"],
@@ -156,39 +156,36 @@ const SPECIAL_SPLIT = {
 
 const STRESS_RE = /[ˈˌ]/g;
 
-/* ====== 非US/変則表記を徹底的に除去して US に正規化 ======
-   - ɹ→r, əʊ→oʊ, ɒ→ɑ
-   - ɪə/eə/ɛə/ʊə → ɪr/ɛr/ɛr/ʊr
-   - 単語 "are" はどんなブレが来ても ɑr に統一
-*/
+/* ====== BrE/旧表記→USへ吸収（表記ゆれを歓迎して受け、最終的にUS化） ====== */
 function sanitizeIPA(word, t){
   const w = (word||'').toLowerCase();
   let s = (t||'').normalize('NFC');
 
-  s = s.replace(/ɹ/g,'r')
-       .replace(/əʊ/g,'oʊ')
-       .replace(/ɒ/g,'ɑ')
-       // 中心化二重母音を US rhotic へ
-       .replace(/iə/g,'ɪr').replace(/eə/g,'ɛr').replace(/ɛə/g,'ɛr').replace(/ʊə/g,'ʊr')
-       // er 系の表記ゆれを US 記号へ
-       .replace(/ɜːr/g,'ɝː');
+  // 一般ゆれ
+  s = s.replace(/ɹ/g,'r')   // ɹ → r
+       .replace(/əʊ/g,'oʊ') // BrE long o → US
+       .replace(/ɒ/g,'ɑ')   // BrE short o → US
+       .replace(/iə/g,'ɪr') // near BrE → US rhotic
+       .replace(/eə/g,'ɛr') // wear/fairy BrE → US rhotic
+       .replace(/ɛə/g,'ɛr')
+       .replace(/ʊə/g,'ʊr') // cure/tour BrE → US rhotic
+       .replace(/ɜːr/g,'ɝː'); // er sound → US記号
 
-  // 単語 "are" は強制的に ɑr（辞書のブレ対策）
-  if(w === 'are'){
-    s = s.replace(/(æ|e|ɛ)ː?r/g,'ɑr')
-         .replace(/ɑː?r/g, m => m.includes('ː') ? 'ɑːr' : 'ɑr');
+  // are/care 系はどんなブレでも ar sound に
+  if(w === 'are' || /are$/.test(w)){
+    s = s.replace(/(æ|e|ɛ)ː?r/g,'ɑr');
   }
+  // æ + r → ɑr（辞書ゆらぎ）
+  s = s.replace(/æː?r/g, m => m.includes('ː') ? 'ɑːr' : 'ɑr');
+
+  // ar/or をひと塊へ
+  s = s.replace(/ɑː?r/g, m => m.includes('ː') ? 'ɑːr' : 'ɑr')
+       .replace(/ɔː?r/g, m => m.includes('ː') ? 'ɔːr' : 'ɔr');
+
   return s;
 }
 
-/* rhotic の結合（sanitize 後の最終整形） */
-function precomposeRhotic(word, ipaRaw){
-  return sanitizeIPA(word, ipaRaw)
-    .replace(/ɑː?r/g, m => m.includes('ː') ? 'ɑːr' : 'ɑr')
-    .replace(/ɔː?r/g, m => m.includes('ː') ? 'ɔːr' : 'ɔr');
-}
-
-/* 抽出トークン（長い→短い） */
+/* ===== トークン抽出（長い→短い） ===== */
 const TOKEN_RE = new RegExp([
   'ɑːr','ɑr','ɔːr','ɔr',
   'iə','eə','ʊə','ɛə',
@@ -199,7 +196,7 @@ const TOKEN_RE = new RegExp([
 ].join('|'),'g');
 
 function tokenize(word, ipaRaw){
-  const core = precomposeRhotic(word, (ipaRaw||'').replace(STRESS_RE,''));
+  const core = sanitizeIPA(word, (ipaRaw||'').replace(STRESS_RE,''));
   return core.match(TOKEN_RE) || [];
 }
 
@@ -218,7 +215,7 @@ function tokensToCategories(tokens){
 
 function hiliteIPA(word, ipaRaw){
   if(!ipaRaw) return '—';
-  const core = precomposeRhotic(word, ipaRaw);
+  const core = sanitizeIPA(word, ipaRaw);
   return core.replace(TOKEN_RE, (m)=>{
     if(m==='iə'||m==='eə'||m==='ʊə'||m==='ɛə'){
       return `<span class="vwl">${m[0]}</span><span class="vwl">ə</span>`;
@@ -230,7 +227,7 @@ function hiliteIPA(word, ipaRaw){
   });
 }
 
-/* 表示 */
+/* ===== 表示 ===== */
 function renderNormIPA(catObjs){
   const el = document.getElementById('ipaNorm');
   if(!catObjs.length){ el.innerHTML='—'; return; }
@@ -283,59 +280,79 @@ function renderExamples(catObjs){
   });
 }
 
-/* ===== IPA取得（US優先 & 変な表記を除去） ===== */
+/* ===== 「最初から正しいものだけ拾う」ための厳格選択 ===== */
+function looksUS(ipa){
+  return /(oʊ|ɑ|ɝ|ɚ|[ɑɔɪɛʊ]r)/.test(ipa);
+}
+function looksWeird(ipa){
+  return /(əʊ|ɒ|iə|eə|ɛə|ʊə|aə|æ̈|æ\s*iː)/.test(ipa);
+}
+
+/* ===== IPA取得（US最良候補のみ採用。無ければUS化して採用） ===== */
 async function fetchIPA(word){
   const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`;
   const r = await fetch(url);
   if(!r.ok) throw new Error('API error');
   const js = await r.json();
 
-  const cands = [];
+  // 収集
+  const raw = [];
   for(const entry of js){
-    if(entry && Array.isArray(entry.phonetics)){
+    if(entry?.phonetics){
       for(const ph of entry.phonetics){
-        if(ph && ph.text){
-          const txt = sanitizeIPA(word, ph.text);
-          cands.push({text: txt, audio: ph.audio || ''});
+        if(ph?.text){
+          raw.push({text: ph.text, audio: ph.audio||''});
         }
       }
     }
-    if(entry && entry.phonetic){
-      const txt = sanitizeIPA(word, entry.phonetic);
-      cands.push({text: txt, audio: ''});
+    if(entry?.phonetic){
+      raw.push({text: entry.phonetic, audio: ''});
     }
   }
+  if(!raw.length) throw new Error('IPA not found');
 
-  // 変な候補を事前に落とす（正規化後トークンがゼロのもの / 記号が怪しいものを除外）
-  const validCands = cands.filter(p=>{
-    const toks = tokenize(word, p.text);
-    if(!toks.length) return false;
-    // 許容外の中心化非rhoticが残っているなら却下
-    if(/(?:i|e|ɛ|ʊ)ə/.test(p.text)) return false;
-    // 明らかにスペースや奇妙な分割がある場合は減点対象（ここでは除外）
-    if(/\s{2,}/.test(p.text)) return false;
-    return true;
+  // 1) US音声つき & 見た目もUSらしいものだけ（最優先）
+  const usAudio = raw
+    .map(p=>({text: sanitizeIPA(word,p.text), audio:p.audio||'' , _orig:p.text}))
+    .filter(p=>/-us\.mp3$/i.test(p.audio) || /\/us\//i.test(p.audio))
+    .filter(p=>looksUS(p.text) && !looksWeird(p._orig));
+
+  if(usAudio.length){
+    usAudio.sort((a,b)=> (b.text.match(/oʊ|ɑ|ɝ|ɚ/g)||[]).length - (a.text.match(/oʊ|ɑ|ɝ|ɚ/g)||[]).length);
+    return {ipa: usAudio[0].text, audio: usAudio[0].audio};
+  }
+
+  // 2) 音声のUS表記っぽいもの（BrE痕跡なし）
+  const usText = raw
+    .map(p=>({text: sanitizeIPA(word,p.text), audio:p.audio||'', _orig:p.text}))
+    .filter(p=>looksUS(p.text) && !looksWeird(p._orig));
+
+  if(usText.length){
+    usText.sort((a,b)=> (b.text.match(/oʊ|ɑ|ɝ|ɚ|[ɑɔɪɛʊ]r/g)||[]).length - (a.text.match(/oʊ|ɑ|ɝ|ɚ|[ɑɔɪɛʊ]r/g)||[]).length);
+    return {ipa: usText[0].text, audio: usText[0].audio};
+  }
+
+  // 3) どうしてもBrEしか無い場合は US に強制正規化して一番US的なものを採用
+  const normalized = raw
+    .map(p=>({text: sanitizeIPA(word,p.text), audio:p.audio||''}))
+    .filter(p=> (p.text.match(/[æɪiʊuɛɑʌəɔɝɚ]/) )); // 最低限の母音がある
+
+  normalized.sort((a,b)=>{
+    const score = (t)=>{
+      let s=0;
+      if(/oʊ/.test(t)) s+=3;
+      if(/ɑ/.test(t)) s+=2;
+      if(/ɝ|ɚ/.test(t)) s+=3;
+      if(/[ɑɔɪɛʊ]r/.test(t)) s+=2;
+      return s;
+    };
+    return score(b.text)-score(a.text);
   });
 
-  if(!validCands.length) throw new Error('IPA not found');
-
-  const score = (p)=>{
-    const t = p.text || ''; const a = p.audio || ''; let s = 0;
-    if(/-us\.mp3$/i.test(a) || /us/i.test(a)) s += 6;  // US音声
-    if(a) s += 1;                                      // 音声付き優先
-    if(/oʊ/.test(t)) s += 2;                           // US long o
-    if(/ɑ/.test(t)) s += 1;                            // US short o
-    if(/ɚ|ɝ/.test(t)) s += 2;                          // rhotic
-    if(/ɑː?r|ɔː?r|ɪr|ɛr|ʊr/.test(t)) s += 3;          // 明確な rhotic 連結
-    if(/ɛə|eə|iə|ʊə/.test(t)) s -= 5;                  // 非rhotic中心化は強く減点
-    return s;
-  };
-
-  validCands.sort((a,b)=>score(b)-score(a));
-  return {ipa: validCands[0].text, audio: validCands[0].audio};
+  return {ipa: (normalized[0]||raw[0]).text, audio: (normalized[0]||raw[0]).audio};
 }
 
-/* 実行 */
+/* ===== 実行 ===== */
 async function run(){
   const q=document.getElementById('q').value.trim();
   if(!q) return;
@@ -363,7 +380,7 @@ async function run(){
 
   // フォールバック（何も拾えなかった場合でも単母音は拾う）
   if(!catObjs.length && ipa){
-    const simple=(precomposeRhotic(q, ipa).match(/[æɪiʊuɛɑɒʌəɔ]/g)||[])
+    const simple=(sanitizeIPA(q, ipa).match(/[æɪiʊuɛɑɒʌəɔ]/g)||[])
       .map(t=>IPA_TO_CATEGORY[t]).filter(Boolean);
     const seen=new Set();
     catObjs=simple.filter(c=>!seen.has(c) && seen.add(c))
@@ -375,7 +392,7 @@ async function run(){
   renderExamples(catObjs);
 }
 
-/* 初期化 */
+/* ===== 初期化 ===== */
 document.getElementById('btn').addEventListener('click', run);
 document.getElementById('q').addEventListener('keydown', e=>{ if(e.key==='Enter') run(); });
 document.addEventListener('DOMContentLoaded', ()=>{
