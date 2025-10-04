@@ -151,14 +151,20 @@ const IPA_TO_CATEGORY = {
   "ɔɪ": "oi sound",
 
   // 弱母音
-  "ə": "schwa"
+  "ə": "schwa",
+
+  // 追加：æ-raising 系（保険としてここでも short a に吸収）
+  "eə": "short a",
+  "ɛə": "short a"
 };
 
-// 特殊分解（表示は「short i + er sound」などに分ける）
+// 特殊分解（分解が必要なものだけ）
+// camp の [kʰɛəmp]/[kʰeəmp] 対策：eə/ɛə は short a 吸収に変更
 const SPECIAL_SPLIT = {
   "iə": ["short i","er sound"],
-  "eə": ["short e","er sound"],
-  "ʊə": ["short oo","er sound"]
+  "ʊə": ["short oo","er sound"],
+  "eə": ["short a"],
+  "ɛə": ["short a"]
 };
 
 /* ===== 付随データ（音声ファイル名・例語） ===== */
@@ -170,20 +176,20 @@ const CATEGORY_AUDIO = {
   "short a":"short_a.mp3",
   "long a":"long_a.mp3",
   "short oo":"short_oo.mp3",
-  "long u":"long_oo.mp3",       // 以前の long_oo を long u に流用
+  "long u":"long_oo.mp3",
   "short o":"short_o.mp3",
   "long o":"long_o.mp3",
   "ar sound":"ar_sound.mp3",
   "or sound":"or_sound.mp3",
   "er sound":"er_sound.mp3",
-  "ai sound":"long_i.mp3",      // aɪ（流用）
-  "au sound":"ow_sound.mp3",    // aʊ（流用）
+  "ai sound":"long_i.mp3",
+  "au sound":"ow_sound.mp3",
   "oi sound":"oi_sound.mp3",
   "schwa":"schwa.mp3",
   "schwa+r":"schwa_r.mp3"
 };
 
-// カテゴリ → 例語（ローカル words/*.mp3 があるものだけでOK）
+// カテゴリ → 例語
 const CATEGORY_EXAMPLES = {
   "short i": ["fit","it","income"],
   "long e": ["she","believe"],
@@ -211,10 +217,10 @@ const STRESS_RE = /[ˈˌ]/g;
 const TOKEN_RE = new RegExp([
   // r 連結（二文字以上を先に）
   'ɑːr','ɑr','ɔːr','ɔr',
-  // 二重母音・中心化
-  'iə','eə','ʊə',
-  'oʊ','əʊ',
-  'aɪ','aʊ','ɔɪ',
+  // 中心化二重母音（æ-raising含む）
+  'iə','eə','ʊə','ɛə',
+  // 二重母音
+  'oʊ','əʊ','aɪ','aʊ','ɔɪ',
   // 長母音・r化母音
   'iː','uː','ɜː','ɝ','ɚ',
   // 長音記号付き
@@ -232,7 +238,6 @@ function tokensToCategories(tokens){
   const cats = [];
   for(const t of tokens){
     if(SPECIAL_SPLIT[t]){
-      // 分解してそのままカテゴリ名で入れる
       for(const c of SPECIAL_SPLIT[t]) cats.push({cat:c, sym:CATEGORY_LABELS[c]||''});
       continue;
     }
@@ -244,15 +249,14 @@ function tokensToCategories(tokens){
   return cats;
 }
 
-/* ハイライト（母音だけ赤。iə/eə/ʊə は i + ə を個別強調） */
-const HILITE_RE = TOKEN_RE; // 同じ並びでOK
+/* ハイライト（母音だけ赤。iə/eə/ʊə/ɛə は2文字を個別強調） */
+const HILITE_RE = TOKEN_RE;
 
 function hiliteIPA(ipaRaw){
   if(!ipaRaw) return '—';
   const ipa = ipaRaw.normalize('NFC');
   return ipa.replace(HILITE_RE, (m)=>{
-    if(m==='iə' || m==='eə' || m==='ʊə'){
-      // それぞれの1文字ずつを強調
+    if(m==='iə' || m==='eə' || m==='ʊə' || m==='ɛə'){
       return `<span class="vwl">${m[0]}</span><span class="vwl">ə</span>`;
     }
     return `<span class="vwl">${m}</span>`;
@@ -270,7 +274,6 @@ function renderNormIPA(catObjs){
 }
 
 function renderCats(catObjs){
-  // 重複排除し、指定順にソート
   const present = new Set(catObjs.map(o=>o.cat));
   const ordered = CATEGORY_ORDER.filter(c=>present.has(c));
 
