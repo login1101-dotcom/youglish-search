@@ -108,6 +108,9 @@ const CATEGORY_LABELS = {
 };
 
 const IPA_TO_CATEGORY = {
+  "ɑr": "ar sound", "ɑːr": "ar sound",
+  "ɔr": "or sound", "ɔːr": "or sound",
+  "ɝ": "er sound", "ɝː": "er sound", "ɚ": "er sound", "ɜː": "er sound",
   "ɪ": "short i",
   "i": "long e", "iː": "long e",
   "ɛ": "short e",
@@ -119,9 +122,6 @@ const IPA_TO_CATEGORY = {
   "ɒ": "short o",
   "ɔ": "short o",
   "oʊ": "long o", "əʊ": "long o",
-  "ɑr": "ar sound", "ɑːr": "ar sound",
-  "ɔr": "or sound", "ɔːr": "or sound",
-  "ɝ": "er sound", "ɝː": "er sound", "ɚ": "er sound", "ɜː": "er sound",
   "aɪ": "ai sound",
   "aʊ": "au sound",
   "ɔɪ": "oi sound",
@@ -138,7 +138,7 @@ const SPECIAL_SPLIT = {
 /* トークン抽出 */
 const STRESS_RE = /[ˈˌ]/g;
 const TOKEN_RE = new RegExp([
-  'ɑːr','ɑr','ɔːr','ɔr',
+  'ɑːr','ɑr','ɔːr','ɔr',  // r付き優先
   'iə','eə','ʊə','ɛə',
   'oʊ','əʊ','aɪ','aʊ','ɔɪ',
   'iː','uː','ɝ','ɚ','ɜː',
