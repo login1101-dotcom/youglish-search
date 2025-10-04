@@ -15,7 +15,7 @@
   .wrap{max-width:900px;margin:32px auto;padding:0 16px}
   header{background:#fff;position:sticky;top:0;border-bottom:1px solid var(--border);z-index:10}
   h1{font-size:20px;margin:0;padding:14px 16px}
-  .srch{display:flex;gap:8px;flex-wrap:wrap; margin:12px 0 24px}
+  .srch{display:flex;gap:8px;flex-wrap:wrap; margin:12px 0 16px}
   .srch input{flex:1;min-width:220px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;font-size:16px}
   .btn{padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:#fff;cursor:pointer}
   .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -43,8 +43,11 @@
     <button class="btn" id="yg">YouGlishで開く</button>
   </div>
 
-  <section class="sec" id="sec-input">
-    <div class="row"><div class="muted">入力</div><div id="echo" class="ipa"></div></div>
+  <!-- 検索窓の直下に正規化発音記号 -->
+  <section class="sec" id="sec-norm">
+    <div class="muted">正規化発音記号（17母音 &amp; 赤色強調）</div>
+    <div id="ipaNorm" class="ipa">—</div>
+    <div class="muted">※ 取得IPAから母音コアだけ抽出し、指定17カテゴリへマッピング。赤は母音部。</div>
   </section>
 
   <section class="sec" id="sec-ipa">
@@ -62,12 +65,6 @@
         <audio id="dictAudio" preload="none"></audio>
       </div>
     </div>
-  </section>
-
-  <section class="sec" id="sec-norm">
-    <div class="muted">発音記号（17母音に正規化 &amp; 赤色強調）</div>
-    <div id="ipaNorm" class="ipa">—</div>
-    <div class="muted">※ 取得IPAから母音コアだけ抽出し、指定17カテゴリへマッピング。赤は母音部。</div>
   </section>
 
   <section class="sec" id="sec-cats">
@@ -107,7 +104,7 @@ const CATEGORY_LABELS = {
   "long o": "oʊ",
   "ar sound": "ɑːr",
   "or sound": "ɔːr",
-  "er sound": "ɝː",      // ← 統一表記
+  "er sound": "ɝː",
   "ai sound": "aɪ",
   "au sound": "aʊ",
   "oi sound": "ɔɪ",
@@ -117,45 +114,31 @@ const CATEGORY_LABELS = {
 
 // IPA → 正規化カテゴリ
 const IPA_TO_CATEGORY = {
-  // 基本母音
   "ɪ": "short i",
   "i": "long e", "iː": "long e",
   "ɛ": "short e",
   "æ": "short a",
   "eɪ": "long a",
-
   "ʊ": "short oo",
   "u": "long u", "uː": "long u",
-
-  // short o 系
   "ɑ": "short o",
-  "ɑː": "short o",   // AmE は ɑ に吸収
-  "ɒ": "short o",    // BrE
-  "ɔ": "short o",    // r の前でなければ short o
-
-  // long o 系
+  "ɑː": "short o",
+  "ɒ": "short o",
+  "ɔ": "short o",
   "oʊ": "long o",
-  "əʊ": "long o",    // BrE 慣用
-
-  // r 付き（er 系はすべて er sound に集約）
+  "əʊ": "long o",
   "ɑr": "ar sound", "ɑːr": "ar sound",
   "ɔr": "or sound", "ɔːr": "or sound",
   "ɝ": "er sound", "ɝː": "er sound", "ɚ": "er sound", "ɜː": "er sound",
-
-  // 二重母音
   "aɪ": "ai sound",
   "aʊ": "au sound",
   "ɔɪ": "oi sound",
-
-  // 弱母音
   "ə": "schwa",
-
-  // æ-raising 系を short a に吸収
   "eə": "short a",
   "ɛə": "short a"
 };
 
-// 分解（必要最小限）
+// 分解
 const SPECIAL_SPLIT = {
   "iə": ["short i","er sound"],
   "ʊə": ["short oo","er sound"],
@@ -208,17 +191,11 @@ const CATEGORY_EXAMPLES = {
 const STRESS_RE = /[ˈˌ]/g;
 
 const TOKEN_RE = new RegExp([
-  // r連結（長→短）
   'ɑːr','ɑr','ɔːr','ɔr',
-  // 中心化二重母音（æ-raising含む）
   'iə','eə','ʊə','ɛə',
-  // 二重母音
   'oʊ','əʊ','aɪ','aʊ','ɔɪ',
-  // 長母音・r化母音（er 系はここで一本化）
   'iː','uː','ɝː','ɝ','ɚ','ɜː',
-  // 長音記号付き
   'ɑː','ɔː','eɪ',
-  // 単母音
   'æ','ɪ','i','ʊ','u','ɛ','ɑ','ɒ','ʌ','ə','ɔ'
 ].join('|'),'g');
 
@@ -242,9 +219,7 @@ function tokensToCategories(tokens){
   return out;
 }
 
-/* 辞書IPAのハイライト（正規化表示にも流用） */
 const HILITE_RE = TOKEN_RE;
-
 function hiliteIPA(ipaRaw){
   if(!ipaRaw) return '—';
   const ipa = ipaRaw.normalize('NFC');
@@ -339,11 +314,11 @@ async function fetchIPA(word){
     const t = (p.text||'');
     const a = (p.audio||'');
     let s = 0;
-    if(/us/i.test(a) || /-us\.mp3$/i.test(a)) s += 6;   // US音声優先
-    if(a) s += 1;                                      // 音声付き優先
-    if(/oʊ/.test(t)) s += 2; if(/əʊ/.test(t)) s -= 2;  // oʊ(US)優先
-    if(/ɑ/.test(t)) s += 1; if(/ɒ/.test(t)) s -= 1;    // ɑ(US)優先
-    if(/(ɚ|ɝ)/.test(t)) s += 3;                        // rhotic 優先
+    if(/us/i.test(a) || /-us\.mp3$/i.test(a)) s += 6;
+    if(a) s += 1;
+    if(/oʊ/.test(t)) s += 2; if(/əʊ/.test(t)) s -= 2;
+    if(/ɑ/.test(t)) s += 1; if(/ɒ/.test(t)) s -= 1;
+    if(/(ɚ|ɝ)/.test(t)) s += 3;
     return s;
   };
 
@@ -354,7 +329,6 @@ async function fetchIPA(word){
 /* ===== 実行 ===== */
 async function run(){
   const q = document.getElementById('q').value.trim();
-  document.getElementById('echo').textContent = q || '—';
   if(!q) return;
 
   document.getElementById('yg').onclick = ()=>{
@@ -384,7 +358,7 @@ async function run(){
   const toks = tokenize(ipa);
   const catObjs = tokensToCategories(toks);
 
-  renderNormIPA(catObjs);
+  renderNormIPA(catObjs);   // ← 検索窓直下
   renderCats(catObjs);
   renderExamples(catObjs);
 }
