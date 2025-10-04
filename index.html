@@ -21,7 +21,7 @@
   .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
   .sec{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 14px;margin:16px 0}
   .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-  .ipa{font-family: "Noto Serif", "Times New Roman", serif; font-size:22px; letter-spacing:.5px}
+  .ipa{font-family:"Noto Serif","Times New Roman",serif; font-size:22px; letter-spacing:.5px}
   .ipa .vwl{color:var(--red);font-weight:700}
   .muted{color:var(--muted);font-size:13px}
   .chips{display:flex;gap:8px;flex-wrap:wrap}
@@ -67,7 +67,7 @@
   <section class="sec" id="sec-norm">
     <div class="muted">発音記号（17母音に正規化 &amp; 赤色強調）</div>
     <div id="ipaNorm" class="ipa">—</div>
-    <div class="muted">※ 取得IPAから母音コア（<span class="code">æ, ɔ, aʊ</span> など）だけ抽出し、指定17カテゴリへマッピング。赤は母音部。</div>
+    <div class="muted">※ 取得IPAから母音コアだけ抽出し、指定17カテゴリへマッピング。赤は母音部。</div>
   </section>
 
   <section class="sec" id="sec-cats">
@@ -85,136 +85,240 @@
 </div>
 
 <script>
-/* ========== 17カテゴリ定義 ========== */
-const VOWEL_BOOK = [
-  {key:'short_a',  label:'short a',   symbol:'æ',  vfile:'short_a.mp3',  ex:['cat','camp','bath','fan']},
-  {key:'long_a',   label:'long a',    symbol:'eɪ', vfile:'long_a.mp3',   ex:['fate','great']},
-  {key:'ar_sound', label:'ar sound',  symbol:'ɑːr',vfile:'ar_sound.mp3', ex:['car','mark','art']},
-  {key:'schwa',    label:'schwa',     symbol:'ə',  vfile:'schwa.mp3',    ex:['about','support']},
-  {key:'short_e',  label:'short e',   symbol:'e',  vfile:'short_e.mp3',  ex:['let','get','pencil']},
-  {key:'long_e',   label:'long e',    symbol:'iː', vfile:'long_e.mp3',   ex:['she','believe']},
-  {key:'er_sound', label:'er sound',  symbol:'ɜːr',vfile:'er_sound.mp3', ex:['hurt','term']},
-  {key:'short_i',  label:'short i',   symbol:'ɪ',  vfile:'short_i.mp3',  ex:['fit','income','it']},
-  {key:'long_i',   label:'long i',    symbol:'aɪ', vfile:'long_i.mp3',   ex:['eye','iron']},
-  {key:'short_o',  label:'short o',   symbol:'ɑ',  vfile:'short_o.mp3',  ex:['hot','not','lock']},
-  {key:'short_oo', label:'short oo',  symbol:'ʊ',  vfile:'short_oo.mp3', ex:['put']},
-  {key:'long_oo',  label:'long oo',   symbol:'uː', vfile:'long_oo.mp3',  ex:['too','loose']},
-  {key:'long_o',   label:'long o',    symbol:'oʊ', vfile:'long_o.mp3',   ex:['no','note','slow']},
-  {key:'ow_sound', label:'ow sound',  symbol:'aʊ', vfile:'ow_sound.mp3', ex:['out','house']},
-  {key:'oi_sound', label:'oi sound',  symbol:'ɔɪ', vfile:'oi_sound.mp3', ex:['join','joy']},
-  {key:'or_sound', label:'or sound',  symbol:'ɔːr',vfile:'or_sound.mp3', ex:['law','caught','storm','sort']},
-  {key:'short_u',  label:'short u',   symbol:'ʌ',  vfile:'short_u.mp3',  ex:['cup','but','support']},
-];
-const BOOK_BY_KEY = Object.fromEntries(VOWEL_BOOK.map(v=>[v.key,v]));
+/* ===== ここから：ご指定の17母音仕様 ===== */
 
-/* ========== 正規化：ルール ========== */
+// 17母音の表示順
+const CATEGORY_ORDER = [
+  "short i","long e","short e","short a","long a",
+  "short oo","long u","short o","long o",
+  "ar sound","or sound","er sound",
+  "ai sound","au sound","oi sound",
+  "schwa","schwa+r"
+];
+
+// ラベル（表示用シンボル）
+const CATEGORY_LABELS = {
+  "short i": "ɪ",
+  "long e": "iː",
+  "short e": "ɛ",
+  "short a": "æ",
+  "long a": "eɪ",
+  "short oo": "ʊ",
+  "long u": "uː",
+  "short o": "ɑ",
+  "long o": "oʊ",
+  "ar sound": "ɑːr",
+  "or sound": "ɔːr",
+  "er sound": "ɝ / ɜː",
+  "ai sound": "aɪ",
+  "au sound": "aʊ",
+  "oi sound": "ɔɪ",
+  "schwa": "ə",
+  "schwa+r": "ɚ"
+};
+
+// IPA → 正規化カテゴリ（抽出済みの母音記号をここで集約）
+const IPA_TO_CATEGORY = {
+  // 基本母音
+  "ɪ": "short i",
+  "i": "long e", "iː": "long e",
+  "ɛ": "short e",
+  "æ": "short a",
+  "eɪ": "long a",
+
+  "ʊ": "short oo",
+  "u": "long u", "uː": "long u",
+
+  // short o 系
+  "ɑ": "short o",
+  "ɑː": "short o",   // AmE では ɑ に吸収
+  "ɒ": "short o",    // BrE
+  "ɔ": "short o",    // r の前でなければ short o として扱う
+
+  // long o 系
+  "oʊ": "long o",
+  "əʊ": "long o",    // BrE 慣用
+
+  // r 付き（連結・r化）
+  "ɑr": "ar sound", "ɑːr": "ar sound",
+  "ɔr": "or sound", "ɔːr": "or sound",
+  "ɝ": "er sound", "ɜː": "er sound",
+  "ɚ": "schwa+r",
+
+  // 二重母音
+  "aɪ": "ai sound",
+  "aʊ": "au sound",
+  "ɔɪ": "oi sound",
+
+  // 弱母音
+  "ə": "schwa"
+};
+
+// 特殊分解（表示は「short i + er sound」などに分ける）
+const SPECIAL_SPLIT = {
+  "iə": ["short i","er sound"],
+  "eə": ["short e","er sound"],
+  "ʊə": ["short oo","er sound"]
+};
+
+/* ===== 付随データ（音声ファイル名・例語） ===== */
+// カテゴリ → ボーカル音声ファイル
+const CATEGORY_AUDIO = {
+  "short i":"short_i.mp3",
+  "long e":"long_e.mp3",
+  "short e":"short_e.mp3",
+  "short a":"short_a.mp3",
+  "long a":"long_a.mp3",
+  "short oo":"short_oo.mp3",
+  "long u":"long_oo.mp3",       // 以前の long_oo を long u に流用
+  "short o":"short_o.mp3",
+  "long o":"long_o.mp3",
+  "ar sound":"ar_sound.mp3",
+  "or sound":"or_sound.mp3",
+  "er sound":"er_sound.mp3",
+  "ai sound":"long_i.mp3",      // aɪ（流用）
+  "au sound":"ow_sound.mp3",    // aʊ（流用）
+  "oi sound":"oi_sound.mp3",
+  "schwa":"schwa.mp3",
+  "schwa+r":"schwa_r.mp3"
+};
+
+// カテゴリ → 例語（ローカル words/*.mp3 があるものだけでOK）
+const CATEGORY_EXAMPLES = {
+  "short i": ["fit","it","income"],
+  "long e": ["she","believe"],
+  "short e": ["let","get","pencil"],
+  "short a": ["cat","camp","bath","fan"],
+  "long a": ["fate","great"],
+  "short oo": ["put"],
+  "long u": ["too","loose"],
+  "short o": ["hot","not","lock","on","dog"],
+  "long o": ["no","note","slow"],
+  "ar sound": ["car","mark","art"],
+  "or sound": ["caught","storm","sort","law"],
+  "er sound": ["hurt","term","bird"],
+  "ai sound": ["eye","iron"],
+  "au sound": ["out","house"],
+  "oi sound": ["join","joy"],
+  "schwa": ["about","support"],
+  "schwa+r": ["color","teacher"]
+};
+
+/* ====== トークン化・ハイライト ====== */
 const STRESS_RE = /[ˈˌ]/g;
 
-/* トークン抽出（順序重要・長いもの先） */
+// 長い並び → 短い並びの順（衝突回避）
 const TOKEN_RE = new RegExp([
-  'ɑːr','ɑr','ɔːr','ɔr',        // r連結（ar/or）
-  'ɪr','er','ʊr',               // r直結（分割対象）
-  'ɪə','eə','ʊə','ɛə',          // 中心化二重母音
-  'oʊ','əʊ',                    // long o
-  'aɪ','aʊ','ɔɪ',               // 二重母音
-  'iː','uː','ɜːr','ɝː',         // 長母音・r化
-  'ɑː','ɔː',                    // 長母音
-  'ɝ','ɚ','ɜː',                // er 系
-  'æ','e','ɛ','ɪ','i','ʊ','ɑ','ɒ','ʌ','ə','ɔ'  // 単母音
-].join('|'), 'g');
+  // r 連結（二文字以上を先に）
+  'ɑːr','ɑr','ɔːr','ɔr',
+  // 二重母音・中心化
+  'iə','eə','ʊə',
+  'oʊ','əʊ',
+  'aɪ','aʊ','ɔɪ',
+  // 長母音・r化母音
+  'iː','uː','ɜː','ɝ','ɚ',
+  // 長音記号付き
+  'ɑː','ɔː','eɪ',
+  // 単母音
+  'æ','ɪ','i','ʊ','u','ɛ','ɑ','ɒ','ʌ','ə','ɔ'
+].join('|'),'g');
 
-/* トークン→カテゴリ */
-function mapTokenToCat(tok){
-  switch(tok){
-    // --- r合流（ar/or） ---
-    case 'ɑːr': case 'ɑr': case 'ɑː': return {key:'ar_sound', symbol:'ɑːr'};
-    case 'ɔːr': case 'ɔr': case 'ɔː': case 'ɔ': return {key:'or_sound', symbol:'ɔːr'};
-
-    // --- r直結（変換無しで分割） ---
-    case 'ɪr': return ['ɪ','ER'];
-    case 'er': return ['e','ER'];
-    case 'ʊr': return ['ʊ','ER'];
-
-    // --- 中心化二重母音 ---
-    case 'ɪə': return ['ɪ','ER'];
-    case 'eə': return ['e','ER'];
-    case 'ʊə': return ['ʊ','ER'];
-    case 'ɛə': return {key:'short_a', symbol:'æ'}; // æ-raising を short a
-
-    // --- 長母音／二重母音など ---
-    case 'oʊ': case 'əʊ':           return {key:'long_o',   symbol:'oʊ'};
-    case 'aɪ':                       return {key:'long_i',   symbol:'aɪ'};
-    case 'aʊ':                       return {key:'ow_sound', symbol:'aʊ'};
-    case 'ɔɪ':                       return {key:'oi_sound', symbol:'ɔɪ'};
-    case 'iː':                       return {key:'long_e',   symbol:'iː'};
-    case 'uː':                       return {key:'long_oo',  symbol:'uː'};
-
-    // --- er sound 系 ---
-    case 'ɝː': case 'ɝ': case 'ɚ': case 'ɜːr': case 'ɜː':
-      return {key:'er_sound', symbol:'ɜːr'};
-
-    // --- 単母音 ---
-    case 'æ':                       return {key:'short_a',  symbol:'æ'};
-    case 'e': case 'ɛ':             return {key:'short_e',  symbol:'e'};
-    case 'ɪ': case 'i':             return {key:'short_i',  symbol:'ɪ'};
-    case 'ɑ': case 'ɒ':             return {key:'short_o',  symbol:'ɑ'};
-    case 'ʊ':                       return {key:'short_oo', symbol:'ʊ'};
-    case 'ʌ':                       return {key:'short_u',  symbol:'ʌ'};
-    case 'ə':                       return {key:'schwa',    symbol:'ə'};
-
-    default:                        return null;
-  }
+function tokenize(ipaRaw){
+  const core = (ipaRaw||'').normalize('NFC').replace(STRESS_RE,'');
+  return core.match(TOKEN_RE) || [];
 }
 
-function tokenizeVowels(ipa){
-  const core = ipa.normalize('NFC').replace(STRESS_RE,'');
-  const toks = core.match(TOKEN_RE) || [];
-  const expanded = [];
-  for(const t of toks){
-    const m = mapTokenToCat(t);
-    if(Array.isArray(m)){ expanded.push(...m); } else { expanded.push(t); }
-  }
-  return expanded;
-}
-
-function normalizeToCats(ipa){
-  const toks = tokenizeVowels(ipa);
+function tokensToCategories(tokens){
   const cats = [];
-  for(const t of toks){
-    if(t === 'ER'){ cats.push({key:'er_sound', symbol:'ɜːr'}); continue; }
-    const mapped = mapTokenToCat(t);
-    if(mapped) cats.push(mapped);
+  for(const t of tokens){
+    if(SPECIAL_SPLIT[t]){
+      // 分解してそのままカテゴリ名で入れる
+      for(const c of SPECIAL_SPLIT[t]) cats.push({cat:c, sym:CATEGORY_LABELS[c]||''});
+      continue;
+    }
+    const cat = IPA_TO_CATEGORY[t];
+    if(!cat) continue;
+    const sym = CATEGORY_LABELS[cat] || t;
+    cats.push({cat, sym});
   }
   return cats;
 }
 
-/* ハイライト（母音だけ赤。ɪr/er/ʊrは母音だけ赤） */
-const HILITE_RE = new RegExp([
-  'ɑːr','ɑr','ɔːr','ɔr',
-  'ɪr','er','ʊr',
-  'ɪə','eə','ʊə','ɛə',
-  'oʊ','əʊ',
-  'aɪ','aʊ','ɔɪ',
-  'iː','uː','ɜːr','ɝː',
-  'ɑː','ɔː',
-  'ɝ','ɚ','ɜː',
-  'æ','e','ɛ','ɪ','i','ʊ','ɑ','ɒ','ʌ','ə','ɔ'
-].join('|'),'g');
+/* ハイライト（母音だけ赤。iə/eə/ʊə は i + ə を個別強調） */
+const HILITE_RE = TOKEN_RE; // 同じ並びでOK
 
 function hiliteIPA(ipaRaw){
+  if(!ipaRaw) return '—';
   const ipa = ipaRaw.normalize('NFC');
   return ipa.replace(HILITE_RE, (m)=>{
-    if(m==='ɪə' || m==='eə' || m==='ʊə'){
+    if(m==='iə' || m==='eə' || m==='ʊə'){
+      // それぞれの1文字ずつを強調
       return `<span class="vwl">${m[0]}</span><span class="vwl">ə</span>`;
-    }
-    if(m==='ɪr' || m==='er' || m==='ʊr'){
-      return `<span class="vwl">${m[0]}</span>r`;
     }
     return `<span class="vwl">${m}</span>`;
   });
 }
 
-/* ==== 辞書API（US寄りを優先スコアで選択／置換なし） ==== */
+/* ====== 表示部 ====== */
+function renderNormIPA(catObjs){
+  if(!catObjs.length){
+    document.getElementById('ipaNorm').innerHTML = '—';
+    return;
+  }
+  const seq = catObjs.map(o=>o.sym);
+  document.getElementById('ipaNorm').innerHTML = hiliteIPA('/' + seq.join(' ') + '/');
+}
+
+function renderCats(catObjs){
+  // 重複排除し、指定順にソート
+  const present = new Set(catObjs.map(o=>o.cat));
+  const ordered = CATEGORY_ORDER.filter(c=>present.has(c));
+
+  const wrap = document.getElementById('catList');
+  wrap.innerHTML = '';
+  for(const c of ordered){
+    const sym = CATEGORY_LABELS[c] || '';
+    const vfile = CATEGORY_AUDIO[c] || '';
+    const el = document.createElement('div');
+    el.className = 'pill';
+    el.innerHTML = `
+      <div class="cat-head"><span>${c}</span><span class="muted">/${sym}/</span></div>
+      <audio preload="none" controls ${vfile ? `src="audio/vowels/${vfile}"` : ''}></audio>
+    `;
+    wrap.appendChild(el);
+  }
+}
+
+function renderExamples(catObjs){
+  const keys = [...new Set(catObjs.map(o=>o.cat))];
+  const tgt = document.getElementById('examples');
+  tgt.innerHTML = '';
+  for(const k of CATEGORY_ORDER){
+    if(!keys.includes(k)) continue;
+    const sym = CATEGORY_LABELS[k] || '';
+    const words = CATEGORY_EXAMPLES[k] || [];
+    const box = document.createElement('div');
+    box.className = 'pill';
+    const chips = words.map(w=>`
+      <div class="chip" data-w="${w}">
+        <span>${w}</span>
+        <audio preload="none" src="audio/words/${w}.mp3"></audio>
+      </div>`).join('');
+    box.innerHTML = `
+      <div style="min-width:110px"><strong>${k}</strong> <span class="muted">/${sym}/</span></div>
+      <div class="chips">${chips || '<span class="small muted">（例語未設定）</span>'}</div>
+    `;
+    tgt.appendChild(box);
+  }
+  tgt.querySelectorAll('.chip').forEach(ch=>{
+    ch.addEventListener('click',()=>{
+      const au = ch.querySelector('audio');
+      if(au){ au.currentTime = 0; au.play().catch(()=>{}); }
+    });
+  });
+}
+
+/* ====== 辞書API（US寄り優先） ====== */
 async function fetchIPA(word){
   const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`;
   const r = await fetch(url);
@@ -240,13 +344,11 @@ async function fetchIPA(word){
     const t = (p.text||'');
     const a = (p.audio||'');
     let s = 0;
-    if(/us/i.test(a) || /-us\.mp3$/i.test(a)) s += 6;   // US音声を強く優先
-    if(a) s += 1;                                      // 音声付きは少し優先
+    if(/us/i.test(a) || /-us\.mp3$/i.test(a)) s += 6;   // US音声優先
+    if(a) s += 1;                                      // 音声付き少し優先
     if(/oʊ/.test(t)) s += 2; if(/əʊ/.test(t)) s -= 2;  // oʊ(US)優先
     if(/ɑ/.test(t)) s += 1; if(/ɒ/.test(t)) s -= 1;    // ɑ(US)優先
     if(/(ɚ|ɝ)/.test(t)) s += 3;                        // r音化母音（US）
-    if(/(ɪr|er|ʊr)/.test(t)) s += 2;                    // rhotic表記優先
-    if(/(ɪə|eə|ʊə)/.test(t)) s -= 1;                    // 非rhoticは少し減点
     return s;
   };
 
@@ -254,65 +356,7 @@ async function fetchIPA(word){
   return {ipa: cands[0].text, audio: cands[0].audio};
 }
 
-/* UI描画 */
-function renderCats(cats){
-  const uniqKeys = [];
-  const seen = {};
-  for(const c of cats){ if(!seen[c.key]){ seen[c.key]=1; uniqKeys.push(c.key); } }
-  const wrap = document.getElementById('catList');
-  wrap.innerHTML = '';
-  for(const k of uniqKeys){
-    const v = BOOK_BY_KEY[k];
-    const el = document.createElement('div');
-    el.className = 'pill';
-    el.innerHTML = `
-      <div class="cat-head"><span>${v.label}</span><span class="muted">/${v.symbol}/</span></div>
-      <audio preload="none" controls src="audio/vowels/${v.vfile}"></audio>
-    `;
-    wrap.appendChild(el);
-  }
-}
-
-function renderExamples(cats){
-  const keys = [...new Set(cats.map(c=>c.key))];
-  const tgt = document.getElementById('examples');
-  tgt.innerHTML = '';
-  for(const k of keys){
-    const v = BOOK_BY_KEY[k];
-    if(!v) continue;
-    const box = document.createElement('div');
-    box.className = 'pill';
-    const chips = (v.ex||[]).map(w=>`
-      <div class="chip" data-w="${w}">
-        <span>${w}</span>
-        <audio preload="none" src="audio/words/${w}.mp3"></audio>
-      </div>`).join('');
-    box.innerHTML = `
-      <div style="min-width:110px"><strong>${v.label}</strong> <span class="muted">/${v.symbol}/</span></div>
-      <div class="chips">${chips || '<span class="small muted">（例語未設定）</span>'}</div>
-    `;
-    tgt.appendChild(box);
-  }
-  tgt.querySelectorAll('.chip').forEach(ch=>{
-    ch.addEventListener('click',()=>{
-      const au = ch.querySelector('audio');
-      if(au){ au.currentTime = 0; au.play().catch(()=>{}); }
-    });
-  });
-}
-
-/* 正規化IPA（スペース区切り表示） */
-function renderNormIPA(cats){
-  if(!cats.length){
-    document.getElementById('ipaNorm').innerHTML = '—';
-    return;
-  }
-  const seq = cats.map(c=>c.symbol);
-  const shown = '/' + seq.join(' ') + '/';
-  document.getElementById('ipaNorm').innerHTML = hiliteIPA(shown);
-}
-
-/* 検索 */
+/* ====== 検索実行 ====== */
 async function run(){
   const q = document.getElementById('q').value.trim();
   document.getElementById('echo').textContent = q || '—';
@@ -343,13 +387,16 @@ async function run(){
   document.getElementById('wikilink').innerHTML =
     `<a target="_blank" rel="noopener" href="https://en.wiktionary.org/wiki/${encodeURIComponent(q)}">Wiktionary</a>`;
 
-  const cats = ipa ? normalizeToCats(ipa) : [];
-  renderNormIPA(cats);
-  renderCats(cats);
-  renderExamples(cats);
+  // 正規化
+  const toks = tokenize(ipa);
+  const catObjs = tokensToCategories(toks);
+
+  renderNormIPA(catObjs);
+  renderCats(catObjs);
+  renderExamples(catObjs);
 }
 
-/* 初期化 */
+/* ====== 初期化 ====== */
 document.getElementById('btn').addEventListener('click', run);
 document.getElementById('q').addEventListener('keydown', (e)=>{ if(e.key==='Enter') run(); });
 document.addEventListener('DOMContentLoaded', ()=>{
