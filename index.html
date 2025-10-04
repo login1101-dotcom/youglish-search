@@ -85,9 +85,8 @@
 </div>
 
 <script>
-/* ===== ここから：ご指定の17母音仕様 ===== */
+/* ===== 17母音仕様（er sound を必ず /ɝː/ で表示） ===== */
 
-// 17母音の表示順
 const CATEGORY_ORDER = [
   "short i","long e","short e","short a","long a",
   "short oo","long u","short o","long o",
@@ -96,7 +95,6 @@ const CATEGORY_ORDER = [
   "schwa","schwa+r"
 ];
 
-// ラベル（表示用シンボル）
 const CATEGORY_LABELS = {
   "short i": "ɪ",
   "long e": "iː",
@@ -109,7 +107,7 @@ const CATEGORY_LABELS = {
   "long o": "oʊ",
   "ar sound": "ɑːr",
   "or sound": "ɔːr",
-  "er sound": "ɝ / ɜː",
+  "er sound": "ɝː",      // ← 統一表記
   "ai sound": "aɪ",
   "au sound": "aʊ",
   "oi sound": "ɔɪ",
@@ -117,7 +115,7 @@ const CATEGORY_LABELS = {
   "schwa+r": "ɚ"
 };
 
-// IPA → 正規化カテゴリ（抽出済みの母音記号をここで集約）
+// IPA → 正規化カテゴリ
 const IPA_TO_CATEGORY = {
   // 基本母音
   "ɪ": "short i",
@@ -131,19 +129,18 @@ const IPA_TO_CATEGORY = {
 
   // short o 系
   "ɑ": "short o",
-  "ɑː": "short o",   // AmE では ɑ に吸収
+  "ɑː": "short o",   // AmE は ɑ に吸収
   "ɒ": "short o",    // BrE
-  "ɔ": "short o",    // r の前でなければ short o として扱う
+  "ɔ": "short o",    // r の前でなければ short o
 
   // long o 系
   "oʊ": "long o",
   "əʊ": "long o",    // BrE 慣用
 
-  // r 付き（連結・r化）
+  // r 付き（er 系はすべて er sound に集約）
   "ɑr": "ar sound", "ɑːr": "ar sound",
   "ɔr": "or sound", "ɔːr": "or sound",
-  "ɝ": "er sound", "ɜː": "er sound",
-  "ɚ": "schwa+r",
+  "ɝ": "er sound", "ɝː": "er sound", "ɚ": "er sound", "ɜː": "er sound",
 
   // 二重母音
   "aɪ": "ai sound",
@@ -153,13 +150,12 @@ const IPA_TO_CATEGORY = {
   // 弱母音
   "ə": "schwa",
 
-  // 追加：æ-raising 系（保険としてここでも short a に吸収）
+  // æ-raising 系を short a に吸収
   "eə": "short a",
   "ɛə": "short a"
 };
 
-// 特殊分解（分解が必要なものだけ）
-// camp の [kʰɛəmp]/[kʰeəmp] 対策：eə/ɛə は short a 吸収に変更
+// 分解（必要最小限）
 const SPECIAL_SPLIT = {
   "iə": ["short i","er sound"],
   "ʊə": ["short oo","er sound"],
@@ -167,8 +163,7 @@ const SPECIAL_SPLIT = {
   "ɛə": ["short a"]
 };
 
-/* ===== 付随データ（音声ファイル名・例語） ===== */
-// カテゴリ → ボーカル音声ファイル
+/* ===== 付随データ（音声・例語） ===== */
 const CATEGORY_AUDIO = {
   "short i":"short_i.mp3",
   "long e":"long_e.mp3",
@@ -189,7 +184,6 @@ const CATEGORY_AUDIO = {
   "schwa+r":"schwa_r.mp3"
 };
 
-// カテゴリ → 例語
 const CATEGORY_EXAMPLES = {
   "short i": ["fit","it","income"],
   "long e": ["she","believe"],
@@ -210,19 +204,18 @@ const CATEGORY_EXAMPLES = {
   "schwa+r": ["color","teacher"]
 };
 
-/* ====== トークン化・ハイライト ====== */
+/* ===== トークン化・ハイライト ===== */
 const STRESS_RE = /[ˈˌ]/g;
 
-// 長い並び → 短い並びの順（衝突回避）
 const TOKEN_RE = new RegExp([
-  // r 連結（二文字以上を先に）
+  // r連結（長→短）
   'ɑːr','ɑr','ɔːr','ɔr',
   // 中心化二重母音（æ-raising含む）
   'iə','eə','ʊə','ɛə',
   // 二重母音
   'oʊ','əʊ','aɪ','aʊ','ɔɪ',
-  // 長母音・r化母音
-  'iː','uː','ɜː','ɝ','ɚ',
+  // 長母音・r化母音（er 系はここで一本化）
+  'iː','uː','ɝː','ɝ','ɚ','ɜː',
   // 長音記号付き
   'ɑː','ɔː','eɪ',
   // 単母音
@@ -235,21 +228,21 @@ function tokenize(ipaRaw){
 }
 
 function tokensToCategories(tokens){
-  const cats = [];
+  const out = [];
+  const seen = new Set();
   for(const t of tokens){
-    if(SPECIAL_SPLIT[t]){
-      for(const c of SPECIAL_SPLIT[t]) cats.push({cat:c, sym:CATEGORY_LABELS[c]||''});
-      continue;
+    const parts = SPECIAL_SPLIT[t] ?? [IPA_TO_CATEGORY[t]];
+    for(const cat of parts){
+      if(!cat) continue;
+      if(seen.has(cat)) continue;
+      seen.add(cat);
+      out.push({cat, sym: CATEGORY_LABELS[cat] || ''});
     }
-    const cat = IPA_TO_CATEGORY[t];
-    if(!cat) continue;
-    const sym = CATEGORY_LABELS[cat] || t;
-    cats.push({cat, sym});
   }
-  return cats;
+  return out;
 }
 
-/* ハイライト（母音だけ赤。iə/eə/ʊə/ɛə は2文字を個別強調） */
+/* 辞書IPAのハイライト（正規化表示にも流用） */
 const HILITE_RE = TOKEN_RE;
 
 function hiliteIPA(ipaRaw){
@@ -263,7 +256,7 @@ function hiliteIPA(ipaRaw){
   });
 }
 
-/* ====== 表示部 ====== */
+/* ===== 表示 ===== */
 function renderNormIPA(catObjs){
   if(!catObjs.length){
     document.getElementById('ipaNorm').innerHTML = '—';
@@ -276,7 +269,6 @@ function renderNormIPA(catObjs){
 function renderCats(catObjs){
   const present = new Set(catObjs.map(o=>o.cat));
   const ordered = CATEGORY_ORDER.filter(c=>present.has(c));
-
   const wrap = document.getElementById('catList');
   wrap.innerHTML = '';
   for(const c of ordered){
@@ -293,11 +285,11 @@ function renderCats(catObjs){
 }
 
 function renderExamples(catObjs){
-  const keys = [...new Set(catObjs.map(o=>o.cat))];
+  const keys = new Set(catObjs.map(o=>o.cat));
   const tgt = document.getElementById('examples');
   tgt.innerHTML = '';
   for(const k of CATEGORY_ORDER){
-    if(!keys.includes(k)) continue;
+    if(!keys.has(k)) continue;
     const sym = CATEGORY_LABELS[k] || '';
     const words = CATEGORY_EXAMPLES[k] || [];
     const box = document.createElement('div');
@@ -321,7 +313,7 @@ function renderExamples(catObjs){
   });
 }
 
-/* ====== 辞書API（US寄り優先） ====== */
+/* ===== 辞書API（US寄り優先） ===== */
 async function fetchIPA(word){
   const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`;
   const r = await fetch(url);
@@ -348,10 +340,10 @@ async function fetchIPA(word){
     const a = (p.audio||'');
     let s = 0;
     if(/us/i.test(a) || /-us\.mp3$/i.test(a)) s += 6;   // US音声優先
-    if(a) s += 1;                                      // 音声付き少し優先
+    if(a) s += 1;                                      // 音声付き優先
     if(/oʊ/.test(t)) s += 2; if(/əʊ/.test(t)) s -= 2;  // oʊ(US)優先
     if(/ɑ/.test(t)) s += 1; if(/ɒ/.test(t)) s -= 1;    // ɑ(US)優先
-    if(/(ɚ|ɝ)/.test(t)) s += 3;                        // r音化母音（US）
+    if(/(ɚ|ɝ)/.test(t)) s += 3;                        // rhotic 優先
     return s;
   };
 
@@ -359,7 +351,7 @@ async function fetchIPA(word){
   return {ipa: cands[0].text, audio: cands[0].audio};
 }
 
-/* ====== 検索実行 ====== */
+/* ===== 実行 ===== */
 async function run(){
   const q = document.getElementById('q').value.trim();
   document.getElementById('echo').textContent = q || '—';
@@ -377,8 +369,7 @@ async function run(){
     audioUrl = audio || '';
   }catch(e){ ipa=''; }
 
-  const dictBox = document.getElementById('ipaDict');
-  dictBox.innerHTML = ipa ? hiliteIPA(ipa) : '—';
+  document.getElementById('ipaDict').innerHTML = ipa ? hiliteIPA(ipa) : '—';
 
   const dictAudio = document.getElementById('dictAudio');
   document.getElementById('playDict').onclick = ()=>{
@@ -390,7 +381,6 @@ async function run(){
   document.getElementById('wikilink').innerHTML =
     `<a target="_blank" rel="noopener" href="https://en.wiktionary.org/wiki/${encodeURIComponent(q)}">Wiktionary</a>`;
 
-  // 正規化
   const toks = tokenize(ipa);
   const catObjs = tokensToCategories(toks);
 
@@ -399,7 +389,7 @@ async function run(){
   renderExamples(catObjs);
 }
 
-/* ====== 初期化 ====== */
+/* ===== 初期化 ===== */
 document.getElementById('btn').addEventListener('click', run);
 document.getElementById('q').addEventListener('keydown', (e)=>{ if(e.key==='Enter') run(); });
 document.addEventListener('DOMContentLoaded', ()=>{
