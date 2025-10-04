@@ -15,14 +15,13 @@
   .wrap{max-width:900px;margin:32px auto;padding:0 16px}
   header{background:#fff;position:sticky;top:0;border-bottom:1px solid var(--border);z-index:10}
   h1{font-size:20px;margin:0;padding:14px 16px}
-  .srch{display:flex;gap:8px;flex-wrap:wrap; margin:12px 0 16px}
+  .srch{display:flex;gap:8px;flex-wrap:wrap; margin:12px 0 24px}
   .srch input{flex:1;min-width:220px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;font-size:16px}
   .btn{padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:#fff;cursor:pointer}
   .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
   .sec{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 14px;margin:16px 0}
-  .row{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
-  .col{flex:1;min-width:260px}
-  .ipa{font-family:"Noto Serif","Times New Roman",serif; font-size:22px; letter-spacing:.5px}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .ipa{font-family: "Noto Serif", "Times New Roman", serif; font-size:22px; letter-spacing:.5px}
   .ipa .vwl{color:var(--red);font-weight:700}
   .muted{color:var(--muted);font-size:13px}
   .chips{display:flex;gap:8px;flex-wrap:wrap}
@@ -38,34 +37,28 @@
 <body>
 <header><h1>母音抽出＋例語再生（USのみ・ローカル音源）</h1></header>
 <div class="wrap">
-  <!-- 検索窓 -->
   <div class="srch">
     <input id="q" placeholder="単語（例: dog, camp, centrifuge, cure, near ...）" />
     <button class="btn primary" id="btn">検索</button>
     <button class="btn" id="yg">YouGlishで開く</button>
   </div>
 
-  <!-- 辞書IPA（左） + 正規化IPA（右） -->
+  <!-- 辞書IPA + 正規化IPA 横並び -->
   <section class="sec" id="sec-ipa-norm">
-    <div class="row">
-      <div class="col">
+    <div class="row" style="justify-content:space-between; align-items:flex-start">
+      <div style="flex:1">
         <div class="muted">辞書（IPA）</div>
         <div id="ipaDict" class="ipa">—</div>
-        <div class="muted src-links" style="margin-top:8px">
+        <div class="muted src-links">
           ※ 取得元: dictionaryapi.dev（US優先選択）　
           <span id="wikilink"></span>
         </div>
-        <div style="margin-top:8px">
-          <button class="btn" id="playDict">辞書音声</button>
-          <audio id="dictAudio" preload="none"></audio>
-        </div>
+        <button class="btn" id="playDict">辞書音声</button>
+        <audio id="dictAudio" preload="none"></audio>
       </div>
-      <div class="col">
+      <div style="flex:1">
         <div class="muted">正規化発音記号（17母音 &amp; 赤色強調）</div>
         <div id="ipaNorm" class="ipa">—</div>
-        <div class="muted" style="margin-top:8px">
-          ※ 取得IPAから母音コアだけ抽出し、指定17カテゴリへマッピング。赤は母音部。
-        </div>
       </div>
     </div>
   </section>
@@ -85,7 +78,7 @@
 </div>
 
 <script>
-/* ===== 17母音仕様（er sound は必ず /ɝː/ 表記） ===== */
+/* ========== カテゴリ定義 ========== */
 const CATEGORY_ORDER = [
   "short i","long e","short e","short a","long a",
   "short oo","long u","short o","long o",
@@ -114,7 +107,6 @@ const CATEGORY_LABELS = {
   "schwa+r": "ɚ"
 };
 
-// IPA → 正規化カテゴリ
 const IPA_TO_CATEGORY = {
   "ɪ": "short i",
   "i": "long e", "iː": "long e",
@@ -123,247 +115,160 @@ const IPA_TO_CATEGORY = {
   "eɪ": "long a",
   "ʊ": "short oo",
   "u": "long u", "uː": "long u",
-
-  // short o 系
   "ɑ": "short o",
   "ɒ": "short o",
   "ɔ": "short o",
-
-  // long o 系
-  "oʊ": "long o",
-  "əʊ": "long o",
-
-  // r 付き（ar/or/er）
+  "oʊ": "long o", "əʊ": "long o",
   "ɑr": "ar sound", "ɑːr": "ar sound",
   "ɔr": "or sound", "ɔːr": "or sound",
   "ɝ": "er sound", "ɝː": "er sound", "ɚ": "er sound", "ɜː": "er sound",
-
-  // 二重母音
   "aɪ": "ai sound",
   "aʊ": "au sound",
   "ɔɪ": "oi sound",
-
-  // 弱母音
   "ə": "schwa",
-
-  // æ-raising → short a
   "eə": "short a",
   "ɛə": "short a"
 };
 
-// 分解（必要なもののみ）
 const SPECIAL_SPLIT = {
   "iə": ["short i","er sound"],
-  "ʊə": ["short oo","er sound"],
-  "eə": ["short a"],
-  "ɛə": ["short a"]
+  "ʊə": ["short oo","er sound"]
 };
 
-/* ===== カテゴリ音声・例語 ===== */
-const CATEGORY_AUDIO = {
-  "short i":"short_i.mp3",
-  "long e":"long_e.mp3",
-  "short e":"short_e.mp3",
-  "short a":"short_a.mp3",
-  "long a":"long_a.mp3",
-  "short oo":"short_oo.mp3",
-  "long u":"long_oo.mp3",
-  "short o":"short_o.mp3",
-  "long o":"long_o.mp3",
-  "ar sound":"ar_sound.mp3",
-  "or sound":"or_sound.mp3",
-  "er sound":"er_sound.mp3",
-  "ai sound":"long_i.mp3",
-  "au sound":"ow_sound.mp3",
-  "oi sound":"oi_sound.mp3",
-  "schwa":"schwa.mp3",
-  "schwa+r":"schwa_r.mp3"
-};
-
-const CATEGORY_EXAMPLES = {
-  "short i": ["fit","it","income"],
-  "long e": ["she","believe"],
-  "short e": ["let","get","pencil"],
-  "short a": ["cat","camp","bath","fan"],
-  "long a": ["fate","great"],
-  "short oo": ["put"],
-  "long u": ["too","loose"],
-  "short o": ["hot","not","lock","on","dog"],
-  "long o": ["no","note","slow"],
-  "ar sound": ["car","mark","art"],
-  "or sound": ["caught","storm","sort","law"],
-  "er sound": ["hurt","term","bird"],
-  "ai sound": ["eye","iron"],
-  "au sound": ["out","house"],
-  "oi sound": ["join","joy"],
-  "schwa": ["about","support"],
-  "schwa+r": ["color","teacher"]
-};
-
-/* ===== トークン化・ハイライト ===== */
+/* トークン抽出 */
 const STRESS_RE = /[ˈˌ]/g;
 const TOKEN_RE = new RegExp([
   'ɑːr','ɑr','ɔːr','ɔr',
   'iə','eə','ʊə','ɛə',
   'oʊ','əʊ','aɪ','aʊ','ɔɪ',
-  'iː','uː','ɝː','ɝ','ɚ','ɜː',
-  'ɑː','ɔː','eɪ',
+  'iː','uː','ɝ','ɚ','ɜː',
   'æ','ɪ','i','ʊ','u','ɛ','ɑ','ɒ','ʌ','ə','ɔ'
 ].join('|'),'g');
 
-function tokenize(ipaRaw){
-  const core = (ipaRaw||'').normalize('NFC').replace(STRESS_RE,'');
+function tokenizeVowels(ipa){
+  const core = ipa.normalize('NFC').replace(STRESS_RE,'');
   return core.match(TOKEN_RE) || [];
 }
+
 function tokensToCategories(tokens){
-  const out = [];
+  const cats = [];
   const seen = new Set();
   for(const t of tokens){
-    const parts = SPECIAL_SPLIT[t] ?? [IPA_TO_CATEGORY[t]];
-    for(const cat of parts){
-      if(!cat) continue;
-      if(seen.has(cat)) continue;
-      seen.add(cat);
-      out.push({cat, sym: CATEGORY_LABELS[cat] || ''});
+    const arr = SPECIAL_SPLIT[t] || [IPA_TO_CATEGORY[t]];
+    for(const cat of arr){
+      if(cat && !seen.has(cat)){
+        seen.add(cat);
+        cats.push({cat, sym:CATEGORY_LABELS[cat]||''});
+      }
     }
   }
-  return out;
+  return cats;
 }
-const HILITE_RE = TOKEN_RE;
+
 function hiliteIPA(ipaRaw){
-  if(!ipaRaw) return '—';
   const ipa = ipaRaw.normalize('NFC');
-  return ipa.replace(HILITE_RE, (m)=>{
-    if(m==='iə' || m==='eə' || m==='ʊə' || m==='ɛə'){
-      return `<span class="vwl">${m[0]}</span><span class="vwl">ə</span>`;
-    }
-    return `<span class="vwl">${m}</span>`;
-  });
+  return ipa.replace(TOKEN_RE, m => `<span class="vwl">${m}</span>`);
 }
 
-/* ===== 表示 ===== */
-function renderNormIPA(catObjs){
-  if(!catObjs.length){
-    document.getElementById('ipaNorm').innerHTML = '—';
-    return;
-  }
-  const seq = catObjs.map(o=>o.sym);
-  document.getElementById('ipaNorm').innerHTML = hiliteIPA('/' + seq.join(' ') + '/');
-}
-function renderCats(catObjs){
-  const present = new Set(catObjs.map(o=>o.cat));
-  const ordered = CATEGORY_ORDER.filter(c=>present.has(c));
-  const wrap = document.getElementById('catList');
-  wrap.innerHTML = '';
-  for(const c of ordered){
-    const sym = CATEGORY_LABELS[c] || '';
-    const vfile = CATEGORY_AUDIO[c] || '';
-    const el = document.createElement('div');
-    el.className = 'pill';
-    el.innerHTML = `
-      <div class="cat-head"><span>${c}</span><span class="muted">/${sym}/</span></div>
-      <audio preload="none" controls ${vfile ? `src="audio/vowels/${vfile}"` : ''}></audio>
-    `;
-    wrap.appendChild(el);
-  }
-}
-function renderExamples(catObjs){
-  const keys = new Set(catObjs.map(o=>o.cat));
-  const tgt = document.getElementById('examples');
-  tgt.innerHTML = '';
-  for(const k of CATEGORY_ORDER){
-    if(!keys.has(k)) continue;
-    const sym = CATEGORY_LABELS[k] || '';
-    const words = CATEGORY_EXAMPLES[k] || [];
-    const box = document.createElement('div');
-    box.className = 'pill';
-    const chips = words.map(w=>`
-      <div class="chip" data-w="${w}">
-        <span>${w}</span>
-        <audio preload="none" src="audio/words/${w}.mp3"></audio>
-      </div>`).join('');
-    box.innerHTML = `
-      <div style="min-width:110px"><strong>${k}</strong> <span class="muted">/${sym}/</span></div>
-      <div class="chips">${chips || '<span class="small muted">（例語未設定）</span>'}</div>
-    `;
-    tgt.appendChild(box);
-  }
-  tgt.querySelectorAll('.chip').forEach(ch=>{
-    ch.addEventListener('click',()=>{
-      const au = ch.querySelector('audio');
-      if(au){ au.currentTime = 0; au.play().catch(()=>{}); }
-    });
-  });
-}
-
-/* ===== 辞書API ===== */
 async function fetchIPA(word){
   const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`;
   const r = await fetch(url);
   if(!r.ok) throw new Error('API error');
   const js = await r.json();
+
   const cands = [];
   for(const entry of js){
     if(entry && Array.isArray(entry.phonetics)){
       for(const ph of entry.phonetics){
-        if(ph && ph.text){
-          cands.push({text: ph.text, audio: ph.audio || ''});
-        }
+        if(ph && ph.text){ cands.push({text: ph.text, audio: ph.audio||''}); }
       }
     }
-    if(entry && entry.phonetic){
-      cands.push({text: entry.phonetic, audio: ''});
-    }
+    if(entry && entry.phonetic){ cands.push({text: entry.phonetic, audio:''}); }
   }
   if(!cands.length) throw new Error('IPA not found');
+
   const score = (p)=>{
-    const t = (p.text||'');
-    const a = (p.audio||'');
-    let s = 0;
-    if(/us/i.test(a) || /-us\.mp3$/i.test(a)) s += 6;
-    if(a) s += 1;
-    if(/oʊ/.test(t)) s += 2; if(/əʊ/.test(t)) s -= 2;
-    if(/ɑ/.test(t)) s += 1; if(/ɒ/.test(t)) s -= 1;
-    if(/(ɚ|ɝ)/.test(t)) s += 3;
+    const t = (p.text||''), a = (p.audio||'');
+    let s=0;
+    if(/us/i.test(a)||/-us\.mp3$/i.test(a)) s+=6;
+    if(a) s+=1;
+    if(/oʊ/.test(t)) s+=2; if(/əʊ/.test(t)) s-=2;
+    if(/ɑ/.test(t)) s+=1; if(/ɒ/.test(t)) s-=1;
+    if(/(ɚ|ɝ)/.test(t)) s+=3;
+    if(/(iə|eə|ʊə)/.test(t)) s-=1;
     return s;
   };
   cands.sort((a,b)=>score(b)-score(a));
   return {ipa: cands[0].text, audio: cands[0].audio};
 }
 
-/* ===== 実行 ===== */
+function renderCats(cats){
+  const uniqKeys = [...new Set(cats.map(c=>c.cat))];
+  const wrap = document.getElementById('catList');
+  wrap.innerHTML='';
+  for(const k of uniqKeys){
+    const v = {label:k, symbol:CATEGORY_LABELS[k]};
+    const el=document.createElement('div');
+    el.className='pill';
+    el.innerHTML=`
+      <div class="cat-head"><span>${k}</span><span class="muted">/${v.symbol}/</span></div>
+      <audio preload="none" controls src="audio/vowels/${k}.mp3"></audio>
+    `;
+    wrap.appendChild(el);
+  }
+}
+
+function renderExamples(cats){
+  const keys=[...new Set(cats.map(c=>c.cat))];
+  const tgt=document.getElementById('examples');
+  tgt.innerHTML='';
+  for(const k of keys){
+    const box=document.createElement('div');
+    box.className='pill';
+    box.innerHTML=`<div><strong>${k}</strong> <span class="muted">/${CATEGORY_LABELS[k]}/</span></div>`;
+    tgt.appendChild(box);
+  }
+}
+
+function renderNormIPA(cats){
+  if(!cats.length){
+    document.getElementById('ipaNorm').innerHTML='—';
+    return;
+  }
+  const seq=cats.map(c=>c.sym);
+  document.getElementById('ipaNorm').innerHTML=hiliteIPA('/'+seq.join(' ')+'/');
+}
+
 async function run(){
-  const q = document.getElementById('q').value.trim();
+  const q=document.getElementById('q').value.trim();
   if(!q) return;
-  document.getElementById('yg').onclick = ()=>{
-    const u = `https://youglish.com/pronounce/${encodeURIComponent(q)}/english/us`;
+  document.getElementById('yg').onclick=()=>{
+    const u=`https://youglish.com/pronounce/${encodeURIComponent(q)}/english/us`;
     window.open(u,'_blank');
   };
   let ipa='', audioUrl='';
-  try{
-    const {ipa:ipaRaw, audio} = await fetchIPA(q);
-    ipa = ipaRaw || '';
-    audioUrl = audio || '';
-  }catch(e){ ipa=''; }
-  document.getElementById('ipaDict').innerHTML = ipa ? hiliteIPA(ipa) : '—';
-  const dictAudio = document.getElementById('dictAudio');
-  document.getElementById('playDict').onclick = ()=>{
+  try{ const {ipa:ipaRaw,audio}=await fetchIPA(q); ipa=ipaRaw||''; audioUrl=audio||''; }catch(e){ ipa=''; }
+  document.getElementById('ipaDict').innerHTML=ipa?hiliteIPA(ipa):'—';
+  const dictAudio=document.getElementById('dictAudio');
+  document.getElementById('playDict').onclick=()=>{
     if(!audioUrl){ alert('辞書音声はありません。'); return; }
-    dictAudio.src = audioUrl;
-    dictAudio.play().catch(()=>{});
+    dictAudio.src=audioUrl; dictAudio.play().catch(()=>{});
   };
-  document.getElementById('wikilink').innerHTML =
-    `<a target="_blank" rel="noopener" href="https://en.wiktionary.org/wiki/${encodeURIComponent(q)}">Wiktionary</a>`;
-  const toks = tokenize(ipa);
-  const catObjs = tokensToCategories(toks);
-  renderNormIPA(catObjs);
-  renderCats(catObjs);
-  renderExamples(catObjs);
+  document.getElementById('wikilink').innerHTML=`<a target="_blank" rel="noopener" href="https://en.wiktionary.org/wiki/${encodeURIComponent(q)}">Wiktionary</a>`;
+  const cats=ipa?tokensToCategories(tokenizeVowels(ipa)):[];
+  renderNormIPA(cats);
+  renderCats(cats);
+  renderExamples(cats);
 }
 
-/* ===== 初期化 ===== */
+/* 初期化 */
 document.getElementById('btn').addEventListener('click', run);
 document.getElementById('q').addEventListener('keydown', (e)=>{ if(e.key==='Enter') run(); });
 document.addEventListener('DOMContentLoaded', ()=>{
-  const params = new URL(location.href).searchParams;
-  const
+  const params=new URL(location.href).searchParams;
+  const w=params.get('w')||'';
+  if(w){ document.getElementById('q').value=w; run(); }
+});
+</script>
+</body>
+</html>
