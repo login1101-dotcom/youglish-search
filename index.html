@@ -4,11 +4,10 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<!-- ▼キャッシュ無効化（毎回1回の更新で反映） -->
+<!-- キャッシュ無効化（1回のリロードで反映） -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<!-- ▲ここまで -->
 
 <title>母音抽出＋例語再生（USのみ・ローカル音源）</title>
 <style>
@@ -48,8 +47,8 @@
   <!-- 検索窓 -->
   <div class="srch">
     <input id="q" placeholder="単語（例: are, is, car, dog, camp, cure, near ...）" />
-    <button class="btn primary" id="btn">検索</button>
-    <button class="btn" id="yg">YouGlishで開く</button>
+    <button class="btn primary" id="btn" type="button">検索</button>
+    <button class="btn" id="yg" type="button">YouGlishで開く</button>
   </div>
 
   <!-- 辞書IPA（左） + 正規化IPA（右） -->
@@ -63,7 +62,7 @@
           <span id="wikilink"></span>
         </div>
         <div style="margin-top:8px">
-          <button class="btn" id="playDict">辞書音声</button>
+          <button class="btn" id="playDict" type="button">辞書音声</button>
           <audio id="dictAudio" preload="none"></audio>
         </div>
       </div>
@@ -160,7 +159,6 @@ const CATEGORY_EXAMPLES = {
 };
 
 /* ====== 正規化テーブル ====== */
-// IPA → 正規化カテゴリ（抽出済みトークンの写像）
 const IPA_TO_CATEGORY = {
   // r 連結（r/ɹ両表記対応）
   "ɑr": "ar sound", "ɑːr": "ar sound",
@@ -181,7 +179,7 @@ const IPA_TO_CATEGORY = {
   "ʊ": "short oo",
   "u": "long u", "uː": "long u",
 
-  // short o 系（※ r/ɹ が後ろに **ない** ときのみ）
+  // short o 系（※ r/ɹ が後ろにない時のみ）
   "ɑ": "short o",
   "ɒ": "short o",
   "ɔ": "short o",
@@ -209,7 +207,10 @@ const SPECIAL_SPLIT = {
   "ʊə": ["short oo","er sound"],
   "ɪr": ["short i","er sound"], "ɪɹ": ["short i","er sound"],
   "er": ["short e","er sound"],   "eɹ": ["short e","er sound"],
-  "ʊr": ["short oo","er sound"],  "ʊɹ": ["short oo","er sound"]
+  "ʊr": ["short oo","er sound"],  "ʊɹ": ["short oo","er sound"],
+
+  // æ + r は ar sound（辞書ゆらぎ対策）
+  "ær": ["ar sound"], "æɹ": ["ar sound"]
 };
 
 /* ====== トークン化・ハイライト ====== */
@@ -217,26 +218,25 @@ const STRESS_RE = /[ˈˌ]/g;
 
 /* 事前整形：
    1) ɹ → r
-   2) æ の直後が r/ɹ のときは AR 音へ丸め（辞書表記ゆらぎ対策: are, care など）
-   3) ar/or の結合を保証（長短はカテゴリで吸収） */
+   2) æ + r → ɑr（are/care 誤分類防止）
+   3) ar/or をひと塊へ（長短はカテゴリ側で吸収） */
 function precomposeRhotic(ipaRaw){
   return ipaRaw
     .normalize('NFC')
     .replace(/ɹ/g, 'r')
-    .replace(/ær/g, 'ɑr')   // ★ 追加：æ + r → ɑr（are 誤分類防止）
-    .replace(/æːr/g, 'ɑːr') // 念のため長音対応
+    .replace(/æː?r/g, m => m.includes('ː') ? 'ɑːr' : 'ɑr')
     .replace(/ɑː?r/g, m => m.includes('ː') ? 'ɑːr' : 'ɑr')
     .replace(/ɔː?r/g, m => m.includes('ː') ? 'ɔːr' : 'ɔr');
 }
 
-// 長いもの→短いものの順でマッチ
+// 長い→短い順にマッチ
 const TOKEN_RE = new RegExp([
-  'ɑːr','ɑr','ɔːr','ɔr',          // ← rhotic を必ず優先
+  'ɑːr','ɑr','ɔːr','ɔr',          // rhotic 最優先
   'iə','eə','ʊə','ɛə',
   'oʊ','əʊ','aɪ','aʊ','ɔɪ',
   'iː','uː','ɝː','ɝ','ɚ','ɜː',
   'æ','ɪ','i','ʊ','u','ɛ','ɑ','ɒ','ʌ','ə','ɔ',
-  // 直結（最後に：ここは SPECIAL_SPLIT で母音+erに分解）
+  // 直結（最後：SPECIAL_SPLIT で分解）
   'ɪr','er','ʊr'
 ].join('|'),'g');
 
